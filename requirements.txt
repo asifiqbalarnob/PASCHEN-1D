@@ -1,0 +1,13 @@
+# PASCHEN-1D dependencies
+# Install with:
+#   pip install -r requirements.txt
+
+# Core numerical stack
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+tqdm>=4.65
+
+# Notebook workflow (drivers/postprocessing)
+jupyterlab>=4.0
+ipykernel>=6.0
