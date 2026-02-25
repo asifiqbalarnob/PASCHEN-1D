@@ -33,7 +33,8 @@ The solver creates `<run_name>/` and writes sampled data + metadata.
 - `L`, `A`, `l`, `eps_r`
 - `gas`, `p_Torr`, `T_e`, `T_i`, `gamma`, `n0`
 
-`gamma` is the ion-induced secondary electron yield used in electron-emission boundary closure.
+`gamma` is the cathode ion-induced secondary electron yield used when
+`cathode_electron_boundary="electron_emission"`.
 
 ## 3.2 Circuit Setup
 
@@ -96,6 +97,16 @@ cathode_ion_boundary = "implicit_drift_closure"
 cathode_electron_boundary = "electron_emission"
 ```
 
+Electron-emission mode is side-specific in the current implementation:
+
+- Cathode `electron_emission`:
+  - uses constant ion-induced SEE coefficient `gamma`
+  - may include external emission flux at cathode if enabled
+- Anode `electron_emission`:
+  - uses electron-induced SEE
+  - SEE can be constant (`anode_electron_induced_yield`) or Vaughan-based (`use_vaughan_sey=True`)
+  - may include external emission flux at anode if enabled
+
 ## 3.6 Volume Source Controls
 
 - `enable_volume_sources`
@@ -128,6 +139,23 @@ Per-electrode model toggles (any combination allowed):
   - `cathode_enable_rd_emission`
   - `cathode_enable_quantum_pulse_emission`
 
+Additional anode SEE controls:
+
+- `anode_electron_induced_yield`
+- `use_vaughan_sey`
+- `vaughan_Emax0_eV`
+- `vaughan_dmax0`
+- `vaughan_ks`
+- `vaughan_z`
+- `vaughan_E0`
+
+Vaughan normalization uses:
+\[
+w = \frac{E_{\text{impact}} - E_0}{E_{\max} - E_0},
+\]
+with `E0 = vaughan_E0`. In this code path, the anode impact energy is a
+proxy computed from incoming normal electron drift and a fixed thermal term.
+
 ### Shared vs Separate Electrode Parameters
 
 - `electrode_material_mode = "shared"`:
@@ -151,6 +179,10 @@ This supports different anode/cathode materials and laser/emission settings.
   - pulsed quantum photoemission model
 
 External emission enters through boundary electron-emission closure.
+
+Important model split:
+- `use_vaughan_sey` applies only to anode electron-induced SEE.
+- Cathode SEE remains the constant-`gamma` model.
 
 ## 5. Diagnostics Configuration
 
@@ -269,4 +301,3 @@ Before launching long runs:
 - Add/adjust new emission mechanisms in `emission.py`.
 - Extend BC physics closures in `physics.py` and boundary orchestration in `numerics.py`.
 - Add new diagnostics in `plotting.py` / `postprocess.py`.
-

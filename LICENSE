@@ -1,21 +1,51 @@
-MIT License
+PASCHEN-1D Non-Commercial Citation License (PNCCL) v1.0
 
-Copyright (c) 2026 Asif Iqbal
+Copyright (c) 2026 Asif Iqbal and contributors.
+All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license governs use of the PASCHEN-1D software and associated
+documentation files (the "Software").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Grant of rights (non-commercial only)
+You are permitted to use, copy, modify, and redistribute the Software, in
+source or binary form, solely for non-commercial purposes, subject to all
+conditions in this license.
 
+2. Mandatory acknowledgment and citation
+Any use, modification, redistribution, publication, report, presentation, or
+other dissemination of results obtained using this Software must acknowledge
+the PASCHEN-1D project and include citation of:
+
+Asif Iqbal, Yves Heri, Bingqing Wang, Lan Jin, Md Arifuzzaman Faisal, and
+Peng Zhang, "PASCHEN-1D: A one-dimensional fluid plasma solver with
+multi-mechanism surface emission and flexible external circuit coupling".
+
+3. Redistribution conditions
+Any redistribution of the Software, with or without modification, must retain:
+- this full license text,
+- the copyright notice, and
+- the acknowledgment/citation requirement in Section 2.
+
+4. Commercial use prohibited
+Commercial use is not permitted under this license.
+Commercial use includes, without limitation, any use intended for commercial
+advantage, monetary compensation, paid services, or integration into
+commercial products or workflows.
+
+For commercial licensing inquiries, contact the copyright holder(s).
+
+5. No endorsement
+This license does not grant permission to use names, institutional affiliations,
+or project names to imply endorsement of derived works without prior written
+permission.
+
+6. No warranty
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. Limitation of liability
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.

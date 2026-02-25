@@ -542,8 +542,9 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     - Optional external emission is provided through `build_emission_model`
       and can be configured independently for anode/cathode.
       In the current formulation, emission contributes through:
-        (i) the cathode boundary emission condition (Eq. 11a-style flux closure), and
-        (ii) optionally, the cathode-side electron flux used in circuit current coupling.
+        (i) boundary electron-emission closures at anode/cathode, and
+        (ii) optionally, boundary electron-emission flux terms used in
+             circuit current coupling.
 
     Onboarding map
     --------------
@@ -592,6 +593,13 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     l      = cfg.l
     eps_r_ = cfg.eps_r
     gamma_ = cfg.gamma
+    anode_electron_induced_yield_ = getattr(cfg, "anode_electron_induced_yield", 0.0)
+    use_vaughan_sey_ = getattr(cfg, "use_vaughan_sey", False)
+    vaughan_Emax0_eV_ = getattr(cfg, "vaughan_Emax0_eV", 400.0)
+    vaughan_dmax0_ = getattr(cfg, "vaughan_dmax0", 3.2)
+    vaughan_ks_ = getattr(cfg, "vaughan_ks", 1.0)
+    vaughan_z_ = getattr(cfg, "vaughan_z", 0.0)
+    vaughan_E0_ = getattr(cfg, "vaughan_E0", 0.0)
     p_Torr = cfg.p_Torr
     pr_    = transport.pr
 
@@ -849,7 +857,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         I_Lp_prev   = float(I_Lp[n_idx])   if I_Lp   is not None else None
 
         # (c) Advance external circuit by one time step.
-        # Coupling uses modified cathode electron flux (includes emission).
+        # Coupling uses boundary-modified electron flux (includes optional
+        # anode and/or cathode external-emission contributions).
         V_gap_new, I_new, V_d_new, V_n_new, V_Cs_new, I_s_new, I_Lp_new = circuit_stepper(
             circuit_type=circuit_type,
             V_app_func=V_app_func,
@@ -951,12 +960,20 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
                 ni_curr,
                 phi_iter,
                 gamma_,
+                anode_electron_induced_yield_,
+                transport.T_e_eV,
                 transport.mu_i,
                 transport.mu_e,
                 dx,
                 dt,
                 Gamma_ext_anode=Gamma_ext_anode,
                 Gamma_ext_cathode=Gamma_ext_cathode,
+                use_vaughan_sey=use_vaughan_sey_,
+                vaughan_Emax0_eV=vaughan_Emax0_eV_,
+                vaughan_dmax0=vaughan_dmax0_,
+                vaughan_ks=vaughan_ks_,
+                vaughan_z=vaughan_z_,
+                vaughan_E0=vaughan_E0_,
                 anode_ion_boundary=cfg.anode_ion_boundary,
                 anode_electron_boundary=cfg.anode_electron_boundary,
                 cathode_ion_boundary=cfg.cathode_ion_boundary,
