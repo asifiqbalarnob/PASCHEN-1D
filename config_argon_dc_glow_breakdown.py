@@ -184,7 +184,7 @@ class SimulationConfig:
     # Run identification / labeling
     # ----------------------------------------------------------------------
     #: Optional label used in file naming, plots, etc.
-    run_name: str = "argon_dc_glow_breakdown"
+    run_name: str = "argon_dc_glow_breakdown_100V"
 
     # ----------------------------------------------------------------------
     # Geometry and electrodes
@@ -295,7 +295,7 @@ class SimulationConfig:
 
     # --- Step/DC waveform parameters ---
     #: Peak or DC amplitude [V] (interpreted depending on waveform_type).
-    V_peak: float = 140.0
+    V_peak: float = 100.0
     #: Step ON time [s] (for "step" / pulsed waveforms).
     tV_start: float = 0e-6
     #: Step OFF time [s]. Default = full simulation window.
@@ -399,9 +399,9 @@ class SimulationConfig:
     # Cathode (x=L)
     cathode_enable_constant_J_emission: bool = False
     cathode_enable_fn_emission: bool = False
-    cathode_enable_mg_emission: bool = True
+    cathode_enable_mg_emission: bool = False
     cathode_enable_rd_emission: bool = False
-    cathode_enable_quantum_pulse_emission: bool = True
+    cathode_enable_quantum_pulse_emission: bool = False
         
         
     # --- Shared electrode material/emission parameters ---
