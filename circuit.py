@@ -184,9 +184,10 @@ def update_circuit_no_external_component(
     # dV_app/dt ≈ [ V_app(t + dt) - V_app(t - dt) ] / (2 dt)
     dV_app_dt = (V_app_func(t + dt) - V_app_func(t - dt)) / (2.0 * dt)
 
-    # Dielectric-voltage dynamics from Eq. (23)-compatible mapping.
+    # Dielectric-voltage dynamics from dielectric charge mapping.
     dV_d_dt = beta_d * integral_flux
-    # Differential mapping (Eq. 19): alpha_d * dV_gap/dt = dV_s/dt - dV_d/dt
+    # Differential voltage mapping:
+    # alpha_d * dV_gap/dt = dV_app/dt - dV_d/dt
     dV_gap_dt = (dV_app_dt - dV_d_dt) / alpha_d
 
     # Explicit Euler update.
@@ -417,7 +418,7 @@ def update_circuit_R0_Cp_Rm(
 
     dV_d_dt = beta_d * Phi
 
-    # dV_gap/dt from Eq. (23):
+    # Gap-voltage dynamics from branch-current balance:
     # (V_n - (alpha_d * V_gap + V_d)) / R_m = I_transport + C_gap * dV_gap/dt
     dV_gap_dt = (
         (V_n_prev - alpha_d * V_gap_prev - V_d_prev) / R_m - I_transport
@@ -630,7 +631,7 @@ def update_circuit_R0_Cs_Cp_Rm(
 
     dV_d_dt = beta_d * Phi
 
-    # 7) dV_gap/dt from Eq. (23):
+    # 7) Gap-voltage dynamics from branch-current balance:
     #    (V_n - (alpha_d * V_gap + V_d)) / R_m = I_transport + C_gap * dV_gap/dt
     dV_gap_dt = (
         (V_n_prev - alpha_d * V_gap_prev - V_d_prev) / R_m - I_transport
@@ -759,7 +760,7 @@ def update_circuit_R0_Cs_Ls_Cp_Rm(
 
     dV_d_dt = beta_d * Phi
 
-    # 6) dV_gap/dt from Eq. (23):
+    # 6) Gap-voltage dynamics from branch-current balance:
     #    (V_n - (alpha_d * V_gap + V_d)) / R_m = I_transport + C_gap * dV_gap/dt
     dV_gap_dt = (
         (V_n_prev - alpha_d * V_gap_prev - V_d_prev) / R_m - I_transport
@@ -1086,7 +1087,7 @@ def update_circuit_R0_Cs_Ls_Cp_Lp_Rm(
 
     dV_d_dt = beta_d * Phi
 
-    # 6) Gap-voltage dynamics from Eq. (23):
+    # 6) Gap-voltage dynamics from branch-current balance:
     #    (V_n - (alpha_d * V_gap + V_d)) / R_m = I_transport + C_gap * dV_gap/dt
     dV_gap_dt = (
         (V_n_prev - alpha_d * V_gap_prev - V_d_prev) / R_m - I_transport

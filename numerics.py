@@ -389,12 +389,20 @@ def set_boundary_condition_implicit(
     ni_curr: np.ndarray,
     phi_curr: np.ndarray,
     gamma: float,
+    anode_electron_induced_yield: float,
+    T_e_eV: float,
     mu_i: float,
     mu_e: float,
     dx: float,
     dt: float,
     Gamma_ext_anode: float = 0.0,
     Gamma_ext_cathode: float = 0.0,
+    use_vaughan_sey: bool = False,
+    vaughan_Emax0_eV: float = 400.0,
+    vaughan_dmax0: float = 3.2,
+    vaughan_ks: float = 1.0,
+    vaughan_z: float = 0.0,
+    vaughan_E0: float = 0.0,
     anode_ion_boundary: str = "zero_density",
     anode_electron_boundary: str = "implicit_drift_closure",
     cathode_ion_boundary: str = "implicit_drift_closure",
@@ -422,7 +430,11 @@ def set_boundary_condition_implicit(
     phi_curr : np.ndarray
         Electric potential at the current time step, shape (Nx,).
     gamma : float
-        Ion-induced secondary electron yield coefficient.
+        Cathode ion-induced secondary electron yield coefficient.
+    anode_electron_induced_yield : float
+        Anode electron-induced secondary electron emission yield.
+    T_e_eV : float
+        Electron temperature proxy in eV used for anode impact-energy proxy.
     mu_i, mu_e : float
         Ion/electron mobilities [m²/(V·s)].
     dx : float
@@ -431,10 +443,18 @@ def set_boundary_condition_implicit(
         Time step [s].
     Gamma_ext_anode : float, optional
         Externally driven electron-emission number flux magnitude at the anode
-        [m^-2 s^-1] used by Eq. (11a)-style closure. Default is 0.
+        [m^-2 s^-1] used in the anode electron-emission boundary closure.
+        Default is 0.
     Gamma_ext_cathode : float, optional
         Externally driven electron-emission number flux magnitude at the cathode
-        [m^-2 s^-1] used by Eq. (11a)-style closure. Default is 0.
+        [m^-2 s^-1] used in the cathode electron-emission boundary closure.
+        Default is 0.
+    use_vaughan_sey : bool, optional
+        Enable Vaughan-model anode electron-induced SEY. Cathode SEE remains
+        the constant-gamma model.
+    vaughan_Emax0_eV, vaughan_dmax0, vaughan_ks, vaughan_z, vaughan_E0 : float
+        Vaughan-model parameters used when use_vaughan_sey=True for the
+        anode electron-emission boundary.
 
     Returns
     -------
@@ -496,13 +516,22 @@ def set_boundary_condition_implicit(
         ne_next[0] = boundary_electron_emission_density(
             boundary_side="anode",
             gamma=gamma,
+            anode_electron_induced_yield=anode_electron_induced_yield,
             ni_boundary=float(ni_next[0]),
             mu_i=mu_i,
             mu_e=mu_e,
+            ne_inner=float(ne_next[1]),
+            T_e_eV=T_e_eV,
             phi_boundary=float(phi_curr[0]),
             phi_inner=float(phi_curr[1]),
             dx=dx,
             Gamma_ext=Gamma_ext_anode,
+            use_vaughan_sey=use_vaughan_sey,
+            vaughan_Emax0_eV=vaughan_Emax0_eV,
+            vaughan_dmax0=vaughan_dmax0,
+            vaughan_ks=vaughan_ks,
+            vaughan_z=vaughan_z,
+            vaughan_E0=vaughan_E0,
         )
     else:
         raise ValueError(
@@ -510,16 +539,28 @@ def set_boundary_condition_implicit(
         )
 
     if cathode_electron_boundary == "electron_emission":
+        # Cathode branch uses ion-induced SEE with constant gamma.
+        # Vaughan parameters are passed through the shared API but ignored
+        # for boundary_side="cathode".
         ne_next[-1] = boundary_electron_emission_density(
             boundary_side="cathode",
             gamma=gamma,
+            anode_electron_induced_yield=anode_electron_induced_yield,
             ni_boundary=float(ni_next[-1]),
             mu_i=mu_i,
             mu_e=mu_e,
+            ne_inner=float(ne_next[-2]),
+            T_e_eV=T_e_eV,
             phi_boundary=float(phi_curr[-1]),
             phi_inner=float(phi_curr[-2]),
             dx=dx,
             Gamma_ext=Gamma_ext_cathode,
+            use_vaughan_sey=use_vaughan_sey,
+            vaughan_Emax0_eV=vaughan_Emax0_eV,
+            vaughan_dmax0=vaughan_dmax0,
+            vaughan_ks=vaughan_ks,
+            vaughan_z=vaughan_z,
+            vaughan_E0=vaughan_E0,
         )
     elif cathode_electron_boundary == "zero_density":
         ne_next[-1] = boundary_zero_density()

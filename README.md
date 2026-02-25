@@ -35,7 +35,11 @@
   - `zero_density`
   - `implicit_drift_closure`
   - `electron_emission` (electrons only)
-- External emission through boundary-flux coupling (Eq. 11a-style form), including:
+- Boundary electron-emission closure supports:
+  - cathode ion-induced SEE via constant `gamma`
+  - anode electron-induced SEE via constant `anode_electron_induced_yield` or Vaughan model
+  - externally driven emission flux contributions at anode and/or cathode
+- External emission models available to drive boundary emission flux:
   - `constant_J`
   - Fowler-Nordheim (`fn`)
   - cold Murphy-Good with Schottky-Nordheim correction (`mg`)
@@ -63,7 +67,7 @@
 - Simulation identity and grid:
   - `run_name`, `L`, `A`, `Nt`, `Nx`, `T_total`
 - Gas and plasma:
-  - `gas`, `p_Torr`, `T_e`, `T_i`, `gamma`, `n0`
+  - `gas`, `p_Torr`, `T_e`, `T_i`, `gamma`, `anode_electron_induced_yield`, `n0`
 - Circuit:
   - `circuit_type`, `circuit_time_scheme`, `R0`, `C_s`, `L_s`, `C_p`, `L_p`, `R_m`
 - Voltage waveform:
@@ -78,6 +82,9 @@
   - `enable_anode_external_emission`, `enable_cathode_external_emission`
   - per-model toggles per electrode (for simultaneous multi-model emission)
   - `electrode_material_mode = "shared" | "separate"`
+- Anode Vaughan SEE controls:
+  - `use_vaughan_sey`
+  - `vaughan_Emax0_eV`, `vaughan_dmax0`, `vaughan_ks`, `vaughan_z`, `vaughan_E0`
 
 ## Outputs
 
@@ -99,9 +106,21 @@ For each run, outputs are written to `<run_name>/`:
 - The startup run summary prints the resolved setup (geometry, circuit, boundary modes, emission toggles, diagnostics window).
 - Non-fatal configuration mismatches are reported when `warn_on_config_mismatch=True`.
 - For stiff circuit parameter sets, prefer `circuit_time_scheme="implicit_euler"`.
+- `use_vaughan_sey` affects only the anode `electron_emission` boundary path.
+- Cathode SEE remains the constant-`gamma` model.
+
+## License and Citation
+
+- This project is distributed under the `PASCHEN-1D Non-Commercial Citation License (PNCCL) v1.0`.
+- Commercial use is not permitted without separate written permission.
+- Any use, modification, redistribution, or publication of results obtained
+  using this software must acknowledge/cite:
+
+  Asif Iqbal, Yves Heri, Bingqing Wang, Lan Jin, Md Arifuzzaman Faisal, and
+  Peng Zhang, "PASCHEN-1D: A one-dimensional fluid plasma solver with
+  multi-mechanism surface emission and flexible external circuit coupling".
 
 ## Next Recommended Files
 
 - Full user guide: `TUTORIAL.md`
 - Main config schema: `config.py`
-

@@ -206,8 +206,25 @@ class SimulationConfig:
     T_e: float = 11600.0
     #: Ion temperature [K] (typically room temperature).
     T_i: float = 300.0
-    #: Ion-induced secondary electron yield (SEY) coefficient gamma.
+    #: Cathode ion-induced secondary electron yield (SEY) coefficient gamma.
     gamma: float = 0.1
+
+    #: Anode electron-induced secondary emission yield (delta_ae).
+    anode_electron_induced_yield: float = 0.0
+    #: Enable Vaughan model for anode electron-induced secondary emission
+    #: when anode_electron_boundary = "electron_emission".
+    use_vaughan_sey: bool = False
+    #: Vaughan baseline energy at maximum yield [eV] for anode SEE model.
+    vaughan_Emax0_eV: float = 400.0
+    #: Vaughan baseline maximum secondary electron yield for anode SEE model.
+    vaughan_dmax0: float = 3.2
+    #: Vaughan roughness coefficient for anode SEE model.
+    vaughan_ks: float = 1.0
+    #: Vaughan incidence-angle variable z for anode SEE model.
+    vaughan_z: float = 0.0
+    #: Vaughan threshold-offset energy E0 [eV] used in
+    #: w = (Ep - E0) / (Emax - E0) for anode SEE model.
+    vaughan_E0: float = 0.0
     #: Initial uniform plasma density [m⁻³] for both electrons and ions.
     n0: float = 1e14
 

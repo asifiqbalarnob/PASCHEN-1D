@@ -18,7 +18,7 @@ from typing import Callable
 
 import numpy as np
 
-from physical_constants import kB, e
+from physical_constants import kB, e, m_e
 from config import SimulationConfig, TransportCoeffs
 
 
@@ -278,29 +278,49 @@ def boundary_zero_density() -> float:
 def boundary_electron_emission_density(
     boundary_side: str,
     gamma: float,
+    anode_electron_induced_yield: float,
     ni_boundary: float,
     mu_i: float,
     mu_e: float,
+    ne_inner: float,
+    T_e_eV: float,
     phi_boundary: float,
     phi_inner: float,
     dx: float,
     Gamma_ext: float = 0.0,
+    use_vaughan_sey: bool = False,
+    vaughan_Emax0_eV: float = 400.0,
+    vaughan_dmax0: float = 3.2,
+    vaughan_ks: float = 1.0,
+    vaughan_z: float = 0.0,
+    vaughan_E0: float = 0.0,
 ) -> float:
     """
     Electron-emission boundary closure in flux form, converted to density.
 
-    Flux target follows the Eq. (11a)-style form with side-aware sign:
+    Flux target follows side-specific closure rules:
 
-        Gamma_e,b = s * [Gamma_ext + gamma * Gamma_i,incident,b]
+    Cathode:
+        Gamma_e = -[Gamma_ext + gamma * Gamma_i,incident]
+
+    Anode:
+        Gamma_e = +Gamma_ext - (1 - delta_ae) * Gamma_e,incident
 
     where:
-      - s = -1 for cathode (emitted electrons move toward -x),
-      - s = +1 for anode   (emitted electrons move toward +x).
+      - gamma is the cathode ion-induced secondary-emission yield
+        (constant in this model),
+      - delta_ae is the anode electron-induced secondary-emission yield
+        (constant or Vaughan-model value).
 
-    The incident-ion flux magnitude is computed from local drift ion flux
-    at the boundary using side-aware incidence:
-      - cathode: max(Gamma_i, 0)
-      - anode  : max(-Gamma_i, 0)
+    The anode incident electron flux is estimated from the first interior
+    electron density and local boundary field.
+
+    For anode energy-dependent yield models, this routine computes a proxy
+    electron impact energy [eV]:
+
+        eps_proxy = (m_e / (2 e)) u_in^2 + C_th * T_e_eV,
+
+    with u_in = Gamma_e,incident / n_e,inner and fixed C_th = 2.0.
 
     The target electron flux is converted to boundary density through:
 
@@ -311,11 +331,25 @@ def boundary_electron_emission_density(
     boundary_side : str
         "anode" or "cathode".
     gamma : float
-        Secondary electron emission coefficient.
+        Cathode ion-induced secondary electron emission coefficient
+        (used only for boundary_side="cathode").
+    anode_electron_induced_yield : float
+        Anode electron-induced secondary electron emission yield (delta_ae).
     ni_boundary : float
         Ion density at the boundary cell.
     mu_i, mu_e : float
         Ion and electron mobilities.
+    ne_inner : float
+        Electron density at the first interior cell adjacent to the boundary.
+    T_e_eV : float
+        Electron temperature proxy in eV.
+    use_vaughan_sey : bool, optional
+        If True, compute anode electron-induced yield from the Vaughan model
+        using proxy impact energy; otherwise use constant
+        anode_electron_induced_yield.
+        This flag is used only for boundary_side="anode".
+    vaughan_Emax0_eV, vaughan_dmax0, vaughan_ks, vaughan_z, vaughan_E0 : float
+        Vaughan-model parameters. E0 is the threshold-offset energy in eV.
     phi_boundary, phi_inner : float
         Potential at boundary node and nearest interior node.
     dx : float
@@ -332,13 +366,35 @@ def boundary_electron_emission_density(
     # Drift ion flux and side-aware incident component magnitude.
     Gamma_i_drift = mu_i * ni_boundary * E_boundary
     if boundary_side == "cathode":
+        # Cathode SEE uses constant gamma and incident-ion flux.
         Gamma_i_incident = max(Gamma_i_drift, 0.0)
-        emission_flux_sign = -1.0
+        Gamma_e_target = -(Gamma_ext + gamma * Gamma_i_incident)
     else:
-        Gamma_i_incident = max(-Gamma_i_drift, 0.0)
-        emission_flux_sign = 1.0
-
-    Gamma_e_target = emission_flux_sign * (Gamma_ext + gamma * Gamma_i_incident)
+        # Anode electron-induced emission model:
+        # Gamma_e = +Gamma_ext - (1 - delta_ae) * Gamma_e_incident
+        Gamma_e_incident = max(mu_e * ne_inner * E_boundary, 0.0)
+        n_inner_safe = max(ne_inner, 1e-30)
+        u_in = Gamma_e_incident / n_inner_safe
+        impact_energy_proxy_eV = (m_e / (2.0 * e)) * u_in * u_in + 2.0 * max(T_e_eV, 0.0)
+        if use_vaughan_sey:
+            E0 = max(vaughan_E0, 0.0)
+            Emax = max(vaughan_Emax0_eV, 1e-12) * (
+                1.0 + (max(vaughan_ks, 0.0) * vaughan_z * vaughan_z / (2.0 * np.pi))
+            )
+            dmax = max(vaughan_dmax0, 0.0) * (
+                1.0 + (max(vaughan_ks, 0.0) * vaughan_z * vaughan_z / (2.0 * np.pi))
+            )
+            den_w = max(Emax - E0, 1e-12)
+            w = max((impact_energy_proxy_eV - E0) / den_w, 0.0)
+            if w <= 1.0:
+                delta_ae = dmax * (w * np.exp(1.0 - w)) ** 0.56
+            elif w < 3.6:
+                delta_ae = dmax * (w * np.exp(1.0 - w)) ** 0.25
+            else:
+                delta_ae = dmax * 1.125 / (w ** 0.35)
+        else:
+            delta_ae = max(anode_electron_induced_yield, 0.0)
+        Gamma_e_target = Gamma_ext - (1.0 - delta_ae) * Gamma_e_incident
 
     # Convert target electron flux to density using drift closure.
     coeff = -mu_e * E_boundary  # Gamma_e = coeff * n_e
