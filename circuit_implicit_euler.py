@@ -1,12 +1,15 @@
 """
 circuit_implicit_euler.py
 
-Implicit-Euler circuit stepping for PASCHEN-1D.
+Implicit-Euler stepping for external-circuit states in PASCHEN-1D.
 
-This module mirrors the circuit topologies in `circuit.py`, but advances
-the lumped circuit states with a single implicit-Euler step per plasma step.
+This module mirrors the circuit topology set in `circuit.py` and uses the
+same coupling interface (transport current in, gap voltage out). The implicit
+stepper is selected through `SimulationConfig.circuit_time_scheme =
+"implicit_euler"` and is intended for stiff circuit parameter sets.
 
-It is intentionally standalone and not wired into the runtime yet.
+Only the lumped circuit states are advanced implicitly here. Plasma species
+time integration remains in the plasma solver (`paschen_1d.py` + `numerics.py`).
 """
 
 from typing import Callable, Optional
@@ -70,7 +73,9 @@ def step_circuit_implicit_euler(
     Optional[float],
 ]:
     """
-    Implicit-Euler analog of `circuit.step_circuit(...)`.
+    Implicit-Euler analog of `circuit.step_circuit(...)` for external-circuit
+    state variables.
+
     Return order:
         (V_gap_new, I_discharge, V_d_new, V_n_new, V_Cs_new, I_s_new, I_Lp_new)
     """
