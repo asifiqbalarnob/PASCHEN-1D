@@ -46,9 +46,13 @@ from config import SimulationConfig, SimulationState
 from outputs import allocate_outputs, write_snapshot, write_run_metadata
 from physics import (
     make_voltage_waveform,
-    set_transport_coefficients,
+    build_transport_reference_state,
+    build_electron_mobility_profile,
+    build_electron_diffusion_profile,
+    build_ion_mobility_profile,
+    build_ion_diffusion_profile,
     build_initial_conditions,
-    compute_townsend_alpha,
+    build_townsend_alpha_profile,
 )
 from numerics import (
     build_poisson_tridiag_interior,
@@ -62,6 +66,8 @@ from plotting import (
     plot_selected_spatial_quantity,
     plot_selected_temporal_group,
     plot_selected_spatial_group,
+    plot_averaged_spatial_quantity,
+    plot_averaged_spatial_group,
     plot_particle_inventory,
 )
 from circuit import step_circuit
@@ -71,6 +77,7 @@ from emission import build_emission_model
 
 
 def _format_waveform_summary(cfg: SimulationConfig) -> str:
+    """Return a compact human-readable summary of the configured voltage waveform."""
     if cfg.waveform_type == "dc":
         return f"type=dc, V_peak={cfg.V_peak:.6g} V"
     if cfg.waveform_type == "step":
@@ -95,6 +102,7 @@ def _enabled_external_emission_components_for_electrode(
     cfg: SimulationConfig,
     electrode: str,
 ) -> list[str]:
+    """Return the enabled externally driven emission component labels for one electrode."""
     prefix = "anode" if electrode == "anode" else "cathode"
     enabled = []
     if getattr(cfg, f"{prefix}_enable_constant_J_emission", False):
@@ -110,9 +118,76 @@ def _enabled_external_emission_components_for_electrode(
     return enabled
 
 
+def _format_electron_transport_summary(cfg: SimulationConfig) -> str:
+    """Summarize the configured electron transport-coefficient source."""
+    source = cfg.electron_transport_source
+
+    if source == "user_defined_equations":
+        return "source=user_defined_equations (transport formulas in physics.py)"
+    if source == "swarm_data_table_interpolation":
+        return (
+            "source=swarm_data_table_interpolation, "
+            f"file='{cfg.electron_swarm_data_path}', "
+            f"file_gas={cfg.electron_swarm_data_gas}"
+        )
+    return f"source={source}"
+
+
+def _format_ion_transport_summary(cfg: SimulationConfig) -> str:
+    """Summarize the configured ion transport-coefficient source."""
+    source = cfg.ion_transport_source
+    if source == "user_defined_equations":
+        return "source=user_defined_equations (transport formulas in physics.py)"
+    if source == "swarm_data_table_interpolation":
+        return "source=swarm_data_table_interpolation (falls back to user_defined_equations until ion-table support is added)"
+    return f"source={source}"
+
+
+def _format_townsend_alpha_summary(cfg: SimulationConfig) -> str:
+    """Summarize the configured Townsend-ionization coefficient source."""
+    source = cfg.townsend_alpha_source
+    if source == "user_defined_equations":
+        return "source=user_defined_equations (alpha(E, p) formulas in physics.py)"
+    if source == "swarm_data_table_interpolation":
+        alpha_path = (
+            cfg.townsend_alpha_swarm_data_path
+            if cfg.townsend_alpha_swarm_data_path is not None
+            else cfg.electron_swarm_data_path
+        )
+        alpha_gas = (
+            cfg.townsend_alpha_swarm_data_gas
+            if cfg.townsend_alpha_swarm_data_gas is not None
+            else cfg.electron_swarm_data_gas
+        )
+        return (
+            "source=swarm_data_table_interpolation, "
+            f"file='{alpha_path}', "
+            f"file_gas={alpha_gas}"
+        )
+    return f"source={source}"
+
+
+def _format_anode_secondary_emission_summary(cfg: SimulationConfig) -> str:
+    """Summarize the active anode electron-induced secondary-emission model."""
+    base = f"delta_ae={cfg.anode_electron_induced_yield:.6g}"
+    if not getattr(cfg, "use_vaughan_sey", False):
+        return f"model=constant, {base}"
+    return (
+        "model=vaughan, "
+        f"{base}, "
+        f"Emax0={cfg.vaughan_Emax0_eV:.6g} eV, "
+        f"dmax0={cfg.vaughan_dmax0:.6g}, "
+        f"ks={cfg.vaughan_ks:.6g}, "
+        f"z={cfg.vaughan_z:.6g}, "
+        f"E0={cfg.vaughan_E0:.6g} eV"
+    )
+
+
 def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> None:
+    """Print the resolved startup configuration summary shown before time stepping."""
     temporal = cfg.diagnostics.temporal
     spatial = cfg.diagnostics.spatial
+    averaged_spatial = cfg.diagnostics.averaged_spatial
 
     temporal_plot_mode = (
         f"grouped ({len(temporal.plot_groups)} groups)"
@@ -129,6 +204,11 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         if spatial.t_samples is None
         else ", ".join(f"{t:.3e}" for t in spatial.t_samples)
     )
+    averaged_spatial_plot_mode = (
+        f"grouped ({len(averaged_spatial.plot_groups)} groups)"
+        if averaged_spatial.plot_groups is not None
+        else f"separate ({len(averaged_spatial.quantities)} quantities)"
+    )
 
     print("\n=== PASCHEN-1D RUN SUMMARY ===")
     print(f"run_name: {cfg.run_name}")
@@ -136,7 +216,20 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         f"geometry: L={cfg.L:.6g} m, A={cfg.A:.6g} m^2, "
         f"l={cfg.l:.6g} m, eps_r={cfg.eps_r:.6g}"
     )
-    print(f"plasma: gas={cfg.gas}, p_Torr={cfg.p_Torr:.6g}, n0={cfg.n0:.6g} m^-3")
+    print(
+        f"plasma: gas={cfg.gas}, p_Torr={cfg.p_Torr:.6g}, "
+        f"T_e={cfg.T_e:.6g} K, T_i={cfg.T_i:.6g} K, "
+        f"n0={cfg.n0:.6g} m^-3"
+    )
+    print(
+        f"transport-e: {_format_electron_transport_summary(cfg)}"
+    )
+    print(
+        f"transport-i: {_format_ion_transport_summary(cfg)}"
+    )
+    print(
+        f"townsend-alpha: {_format_townsend_alpha_summary(cfg)}"
+    )
     print(
         f"grid/time: Nx={cfg.Nx}, Nt={cfg.Nt}, T_total={cfg.T_total:.6g} s, "
         f"dx={dx:.6g} m, dt={dt:.6g} s"
@@ -154,6 +247,11 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         f"cathode(i={cfg.cathode_ion_boundary}, e={cfg.cathode_electron_boundary})"
     )
     print(
+        "secondary-emission: "
+        f"cathode_gamma={cfg.gamma:.6g}, "
+        f"anode={_format_anode_secondary_emission_summary(cfg)}"
+    )
+    print(
         "sources: "
         f"volume={cfg.enable_volume_sources}, ionization={cfg.enable_ionization_source}, "
         f"recombination={cfg.enable_recombination_sink}"
@@ -169,6 +267,13 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         f"to_circuit={cfg.enable_emission_in_circuit_current}"
     )
     print(
+        "output: "
+        f"save_every={cfg.save_every}, "
+        f"log_intermediate={cfg.log_intermediate}, "
+        f"print_run_summary={cfg.print_run_summary}, "
+        f"warn_on_config_mismatch={cfg.warn_on_config_mismatch}"
+    )
+    print(
         "diagnostics-temporal: "
         f"enabled={temporal.enabled}, mode={temporal_plot_mode}, "
         f"window=[{temporal.t_start},{temporal.t_end}]"
@@ -178,10 +283,22 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         f"enabled={spatial.enabled}, mode={spatial_plot_mode}, "
         f"t_samples={t_samples_text}, x_unit={spatial.x_unit}"
     )
+    if averaged_spatial.mode == "time_window":
+        avg_window_text = (
+            f"window=[{averaged_spatial.t_avg_start},{averaged_spatial.t_avg_end}]"
+        )
+    else:
+        avg_window_text = f"last_n_cycles={averaged_spatial.N_cycle_avg}"
+    print(
+        "diagnostics-averaged-spatial: "
+        f"enabled={averaged_spatial.enabled}, mode={averaged_spatial_plot_mode}, "
+        f"avg_mode={averaged_spatial.mode}, {avg_window_text}, x_unit={averaged_spatial.x_unit}"
+    )
     print("==============================\n")
 
 
 def _print_config_warnings(cfg: SimulationConfig) -> None:
+    """Print non-fatal warnings for inconsistent or ineffective configuration choices."""
     warnings = []
 
     if cfg.Nx < 3:
@@ -265,7 +382,8 @@ def run_configured_diagnostics(
     V_app_func,
 ) -> None:
     """
-    Run user-selected temporal and spatial diagnostics after simulation.
+    Run user-selected temporal, spatial, and averaged-spatial diagnostics
+    after simulation.
 
     Behavior summary:
     - Temporal quantities are evaluated on `state.time`, then optionally
@@ -274,6 +392,8 @@ def run_configured_diagnostics(
       Requested times are matched to the nearest saved snapshot time.
     - For final-time requests of ne/ni/phi/E, exact final in-memory profiles
       are used instead of nearest-snapshot lookup.
+    - Averaged spatial quantities are formed by averaging saved snapshots over
+      a chosen time window or over the last N RF cycles.
 
     This routine is post-processing only and does not affect solver logic.
     """
@@ -377,18 +497,12 @@ def run_configured_diagnostics(
                 )
 
     # --------------------------
-    # Spatial diagnostics
+    # Spatial / averaged-spatial diagnostics
     # --------------------------
     spatial_cfg = cfg.diagnostics.spatial
-    if not spatial_cfg.enabled:
+    averaged_cfg = cfg.diagnostics.averaged_spatial
+    if (not spatial_cfg.enabled) and (not averaged_cfg.enabled):
         return
-
-    requested_times = (
-        np.asarray(spatial_cfg.t_samples, dtype=np.float64)
-        if spatial_cfg.t_samples is not None
-        else np.array([state.time[-1]], dtype=np.float64)
-    )
-    requested_times = np.clip(requested_times, state.time[0], state.time[-1])
 
     # Saved snapshot times corresponding to *_sampled memmaps.
     nsave = int((cfg.Nt - 1) // cfg.save_every + 1)
@@ -429,10 +543,13 @@ def run_configured_diagnostics(
 
     dt = state.time[1] - state.time[0] if state.time.size > 1 else 0.0
 
-    def collect_profiles_for_quantity(quantity: str) -> tuple[np.ndarray, np.ndarray] | None:
+    def collect_profiles_for_quantity(
+        quantity: str,
+        requested_times_local: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray] | None:
         profiles = []
         actual_times = []
-        for t_req in requested_times:
+        for t_req in requested_times_local:
             # Use exact final fields when final time is requested.
             if (
                 quantity in final_profiles
@@ -453,52 +570,159 @@ def run_configured_diagnostics(
             return None
         return np.vstack(profiles), np.asarray(actual_times, dtype=np.float64)
 
-    spatial_groups = (
-        spatial_cfg.plot_groups
-        if spatial_cfg.plot_groups is not None
-        else tuple((q,) for q in spatial_cfg.quantities)
+    if spatial_cfg.enabled:
+        requested_times = (
+            np.asarray(spatial_cfg.t_samples, dtype=np.float64)
+            if spatial_cfg.t_samples is not None
+            else np.array([state.time[-1]], dtype=np.float64)
+        )
+        requested_times = np.clip(requested_times, state.time[0], state.time[-1])
+
+        spatial_groups = (
+            spatial_cfg.plot_groups
+            if spatial_cfg.plot_groups is not None
+            else tuple((q,) for q in spatial_cfg.quantities)
+        )
+
+        for group in spatial_groups:
+            profiles_map: dict[str, np.ndarray] = {}
+            actual_times_ref = None
+
+            for quantity in group:
+                collected = collect_profiles_for_quantity(quantity, requested_times)
+                if collected is None:
+                    print(f"Spatial diagnostic '{quantity}' unavailable; skipping in group {group}.")
+                    continue
+                prof, times_q = collected
+                profiles_map[quantity] = prof
+                if actual_times_ref is None:
+                    actual_times_ref = times_q
+
+            if len(profiles_map) == 0 or actual_times_ref is None:
+                print(f"Spatial diagnostic group {group} unavailable; skipping.")
+                continue
+
+            valid_group = tuple(q for q in group if q in profiles_map)
+            savepath = None
+            if spatial_cfg.savepath_prefix:
+                savepath = f"{spatial_cfg.savepath_prefix}_{'_'.join(valid_group)}.pdf"
+
+            if len(valid_group) == 1:
+                q = valid_group[0]
+                plot_selected_spatial_quantity(
+                    x=state.x,
+                    quantity=q,
+                    profiles=profiles_map[q],
+                    sample_times=actual_times_ref,
+                    x_unit=spatial_cfg.x_unit,
+                    savepath=savepath,
+                )
+            else:
+                plot_selected_spatial_group(
+                    x=state.x,
+                    quantities=valid_group,
+                    profiles_map=profiles_map,
+                    sample_times=actual_times_ref,
+                    x_unit=spatial_cfg.x_unit,
+                    savepath=savepath,
+                )
+
+    # --------------------------
+    # Averaged spatial diagnostics
+    # --------------------------
+    if not averaged_cfg.enabled:
+        return
+
+    averaged_groups = (
+        averaged_cfg.plot_groups
+        if averaged_cfg.plot_groups is not None
+        else tuple((q,) for q in averaged_cfg.quantities)
     )
 
-    for group in spatial_groups:
+    if averaged_cfg.mode == "time_window":
+        avg_t_start = float(saved_times[0]) if averaged_cfg.t_avg_start is None else float(averaged_cfg.t_avg_start)
+        avg_t_end = float(saved_times[-1]) if averaged_cfg.t_avg_end is None else float(averaged_cfg.t_avg_end)
+        if avg_t_end < avg_t_start:
+            avg_t_start, avg_t_end = avg_t_end, avg_t_start
+        avg_mask = (saved_times >= avg_t_start) & (saved_times <= avg_t_end)
+        averaging_label = f"Average over [{avg_t_start*1e9:.1f}, {avg_t_end*1e9:.1f}] ns"
+    elif averaged_cfg.mode == "last_n_cycles":
+        if cfg.waveform_type != "rf" or cfg.f_rf <= 0.0:
+            print(
+                "Averaged spatial diagnostics skipped: "
+                "mode='last_n_cycles' requires waveform_type='rf' and f_rf > 0."
+            )
+            return
+        n_cycles = int(averaged_cfg.N_cycle_avg)
+        if n_cycles <= 0:
+            print(
+                "Averaged spatial diagnostics skipped: "
+                "N_cycle_avg must be > 0 when mode='last_n_cycles'."
+            )
+            return
+        rf_period = 1.0 / float(cfg.f_rf)
+        avg_t_end = float(saved_times[-1])
+        avg_t_start = avg_t_end - n_cycles * rf_period
+        avg_mask = (saved_times >= avg_t_start) & (saved_times <= avg_t_end)
+        averaging_label = f"Average over last {n_cycles} RF cycle(s)"
+    else:
+        print(f"Averaged spatial diagnostics skipped: unknown mode '{averaged_cfg.mode}'.")
+        return
+
+    if not np.any(avg_mask):
+        print("Averaged spatial diagnostics skipped: no saved snapshots in selected averaging window.")
+        return
+
+    for group in averaged_groups:
         profiles_map: dict[str, np.ndarray] = {}
-        actual_times_ref = None
 
         for quantity in group:
-            collected = collect_profiles_for_quantity(quantity)
-            if collected is None:
-                print(f"Spatial diagnostic '{quantity}' unavailable; skipping in group {group}.")
+            path = sampled_paths.get(quantity)
+            if path is None:
+                print(f"Averaged spatial diagnostic '{quantity}' is unknown; skipping in group {group}.")
                 continue
-            prof, times_q = collected
-            profiles_map[quantity] = prof
-            if actual_times_ref is None:
-                actual_times_ref = times_q
+            if quantity not in sampled_arrays:
+                if path.exists():
+                    sampled_arrays[quantity] = np.memmap(
+                        path, mode="r", dtype=np.float32, shape=(nsave, cfg.Nx)
+                    )
+                else:
+                    print(
+                        f"Averaged spatial diagnostic '{quantity}' unavailable; "
+                        f"saved profile file missing."
+                    )
+                    continue
+            profiles_map[quantity] = np.mean(
+                np.asarray(sampled_arrays[quantity][avg_mask], dtype=np.float64),
+                axis=0,
+            )
 
-        if len(profiles_map) == 0 or actual_times_ref is None:
-            print(f"Spatial diagnostic group {group} unavailable; skipping.")
+        if len(profiles_map) == 0:
+            print(f"Averaged spatial diagnostic group {group} unavailable; skipping.")
             continue
 
         valid_group = tuple(q for q in group if q in profiles_map)
         savepath = None
-        if spatial_cfg.savepath_prefix:
-            savepath = f"{spatial_cfg.savepath_prefix}_{'_'.join(valid_group)}.pdf"
+        if averaged_cfg.savepath_prefix:
+            savepath = f"{averaged_cfg.savepath_prefix}_{'_'.join(valid_group)}.pdf"
 
         if len(valid_group) == 1:
             q = valid_group[0]
-            plot_selected_spatial_quantity(
+            plot_averaged_spatial_quantity(
                 x=state.x,
                 quantity=q,
-                profiles=profiles_map[q],
-                sample_times=actual_times_ref,
-                x_unit=spatial_cfg.x_unit,
+                profile=profiles_map[q],
+                averaging_label=averaging_label,
+                x_unit=averaged_cfg.x_unit,
                 savepath=savepath,
             )
         else:
-            plot_selected_spatial_group(
+            plot_averaged_spatial_group(
                 x=state.x,
                 quantities=valid_group,
                 profiles_map=profiles_map,
-                sample_times=actual_times_ref,
-                x_unit=spatial_cfg.x_unit,
+                averaging_label=averaging_label,
+                x_unit=averaged_cfg.x_unit,
                 savepath=savepath,
             )
 
@@ -579,7 +803,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     V_app_func = make_voltage_waveform(cfg)
 
     # Mobilities, diffusion, recombination, reduced pressure, etc.
-    transport = set_transport_coefficients(cfg)
+    transport = build_transport_reference_state(cfg)
 
     # Emission model (may be None if emission is disabled in cfg)
     emission_model = build_emission_model(cfg)
@@ -731,10 +955,39 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     # Temporary arrays for gradients, fluxes, coefficients, and sources.
     grad_i      = np.empty(Nx, dtype=np.float32)
     grad_e      = np.empty(Nx, dtype=np.float32)
+    mu_i_row    = np.empty(Nx, dtype=np.float32)
+    D_i_row     = np.empty(Nx, dtype=np.float32)
+    u_i_row     = np.empty(Nx, dtype=np.float32)
+    mu_e_row    = np.empty(Nx, dtype=np.float32)
+    D_e_row     = np.empty(Nx, dtype=np.float32)
+    u_e_row     = np.empty(Nx, dtype=np.float32)
     Gamma_i_row = np.empty(Nx, dtype=np.float32)
     Gamma_e_row = np.empty(Nx, dtype=np.float32)
     townsend_alpha_row   = np.empty(Nx, dtype=np.float32)
     nu_row      = np.empty(Nx, dtype=np.float32)
+
+    mu_i_row[:] = build_ion_mobility_profile(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_curr,
+    ).astype(mu_i_row.dtype, copy=False)
+    D_i_row[:] = build_ion_diffusion_profile(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_curr,
+    ).astype(D_i_row.dtype, copy=False)
+    mu_e_row[:] = build_electron_mobility_profile(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_curr,
+        neutral_density=float(transport.neutral_density),
+    ).astype(mu_e_row.dtype, copy=False)
+    D_e_row[:] = build_electron_diffusion_profile(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_curr,
+        neutral_density=float(transport.neutral_density),
+    ).astype(D_e_row.dtype, copy=False)
 
     # ------------------------------------------------------------
     # 6) Store initial snapshot (k = 0)
@@ -762,27 +1015,27 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     # ------------------------------------------------------------
     def ion_flux_local(n: np.ndarray, E: np.ndarray) -> np.ndarray:
         """
-        Gamma_i = mu_i * n_i * E (drift only; diffusion handled separately).
+        Gamma_i = n_i * u_i, where u_i is the local ion drift velocity.
         """
-        return transport.mu_i * n * E
+        return n * E
 
     def d_ion_flux_dn_local(n: np.ndarray, E: np.ndarray) -> np.ndarray:
         """
-        d(Gamma_i)/dn = mu_i * E, used for KT local speed estimates.
+        d(Gamma_i)/dn = u_i, used for KT local speed estimates.
         """
-        return transport.mu_i * E
+        return E
 
     def electron_flux_local(n: np.ndarray, E: np.ndarray) -> np.ndarray:
         """
-        Gamma_e = -mu_e * n_e * E (drift only).
+        Gamma_e = -n_e * u_e, where u_e is the local electron drift velocity.
         """
-        return -transport.mu_e * n * E
+        return -n * E
 
     def d_electron_flux_dn_local(n: np.ndarray, E: np.ndarray) -> np.ndarray:
         """
-        d(Gamma_e)/dn = -mu_e * E, used for KT local speed estimates.
+        d(Gamma_e)/dn = -u_e, used for KT local speed estimates.
         """
-        return -transport.mu_e * E
+        return -E
 
     # ------------------------------------------------------------
     # 9) Main time-integration loop
@@ -790,6 +1043,31 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     start = pytime.perf_counter()
 
     for n_idx in tqdm(range(Nt - 1), mininterval=2, desc="Time stepping"):
+        mu_i_row[:] = build_ion_mobility_profile(
+            cfg=cfg,
+            x_array=x_array,
+            E_column=E_curr,
+        ).astype(mu_i_row.dtype, copy=False)
+        D_i_row[:] = build_ion_diffusion_profile(
+            cfg=cfg,
+            x_array=x_array,
+            E_column=E_curr,
+        ).astype(D_i_row.dtype, copy=False)
+        u_i_row[:] = mu_i_row * E_curr
+        mu_e_row[:] = build_electron_mobility_profile(
+            cfg=cfg,
+            x_array=x_array,
+            E_column=E_curr,
+            neutral_density=float(transport.neutral_density),
+        ).astype(mu_e_row.dtype, copy=False)
+        D_e_row[:] = build_electron_diffusion_profile(
+            cfg=cfg,
+            x_array=x_array,
+            E_column=E_curr,
+            neutral_density=float(transport.neutral_density),
+        ).astype(D_e_row.dtype, copy=False)
+        u_e_row[:] = mu_e_row * E_curr
+
         # (a) Density gradients and drift-diffusion fluxes.
         # np.gradient is used here for diffusion/diagnostic gradients.
         grad_i[:] = np.gradient(ni_curr, dx, edge_order=1).astype(
@@ -800,8 +1078,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         )
 
         # Gamma = -D dn/dx ± mu n E
-        Gamma_i_row[:] = -transport.D_i * grad_i + transport.mu_i * ni_curr * E_curr
-        Gamma_e_row[:] = -transport.D_e * grad_e - transport.mu_e * ne_curr * E_curr
+        Gamma_i_row[:] = -D_i_row * grad_i + ni_curr * u_i_row
+        Gamma_e_row[:] = -D_e_row * grad_e - ne_curr * u_e_row
 
         t_next = float(time[n_idx + 1])
 
@@ -906,10 +1184,15 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
 
         # (d) Ionization/recombination source terms.
         # Townsend alpha(E) [1/m], ionization frequency nu_i = alpha*mu_e*|E|.
-        townsend_alpha_row[:] = compute_townsend_alpha(
-            E_curr, p_Torr, pr_, gas=cfg.gas
-        ).astype(np.float32)
-        nu_row[:] = townsend_alpha_row * transport.mu_e * np.abs(E_curr)
+        townsend_alpha_row[:] = build_townsend_alpha_profile(
+            cfg=cfg,
+            E_column=E_curr,
+            p_Torr=p_Torr,
+            pr=pr_,
+            gas=cfg.gas,
+            neutral_density=float(transport.neutral_density),
+        ).astype(np.float32, copy=False)
+        nu_row[:] = townsend_alpha_row * np.abs(u_e_row)
 
         if cfg.enable_volume_sources:
             ionization_source = (
@@ -929,8 +1212,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             ni_curr,
             ion_flux_local,
             d_ion_flux_dn_local,
-            E_curr,
-            transport.D_i,
+            u_i_row,
+            D_i_row,
             S_row,
             dx,
             dt,
@@ -940,8 +1223,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             ne_curr,
             electron_flux_local,
             d_electron_flux_dn_local,
-            E_curr,
-            transport.D_e,
+            u_e_row,
+            D_e_row,
             S_row,
             dx,
             dt,
@@ -962,8 +1245,10 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
                 gamma_,
                 anode_electron_induced_yield_,
                 transport.T_e_eV,
-                transport.mu_i,
-                transport.mu_e,
+                float(mu_i_row[0]),
+                float(mu_i_row[-1]),
+                float(mu_e_row[0]),
+                float(mu_e_row[-1]),
                 dx,
                 dt,
                 Gamma_ext_anode=Gamma_ext_anode,
@@ -1001,8 +1286,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
 
         # (g) CFL diagnostic for drift term.
         c_cfl[n_idx + 1] = CFL_test(
-            transport.mu_e,
-            transport.mu_i,
+            mu_e_row,
+            mu_i_row,
             E_next,
             dt,
             dx,

@@ -168,7 +168,7 @@ def update_circuit_no_external_component(
     # Adamovic convention requires nonzero dielectric thickness.
     assert l > 0.0, "dielectric_plasma topology (Adamovic) requires l > 0."
 
-    # Common pieces: conduction current and gap capacitance.
+    # Common pieces: transport current and gap capacitance.
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
     C_gap = eps0 * A / L  # bare geometric capacitance of the gas gap
 
@@ -481,7 +481,7 @@ def update_circuit_R0_Cs_Cp(
     # 2) Update series capacitor voltage
     V_Cs_new = V_Cs_prev + dt * (I_s / C_s)
 
-    # 3) Plasma conduction current
+    # 3) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 4) Geometric gap capacitance
@@ -615,7 +615,7 @@ def update_circuit_R0_Cs_Cp_Rm(
     # 2) Update series capacitor voltage
     V_Cs_new = V_Cs_prev + dt * (I_s / C_s)
 
-    # 3) Plasma conduction current
+    # 3) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 4) Geometric gap capacitance
@@ -745,7 +745,7 @@ def update_circuit_R0_Cs_Ls_Cp_Rm(
     # 1) Source voltage
     Vs = float(V_app_func(t))
 
-    # 2) Plasma conduction current
+    # 2) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 3) Geometric gap capacitance
@@ -828,7 +828,7 @@ def update_circuit_R0_Cs_Ls_Cp(
     # 1) Source voltage
     Vs = float(V_app_func(t))
 
-    # 2) Plasma conduction current
+    # 2) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 3) Geometric gap capacitance
@@ -924,7 +924,7 @@ def update_circuit_R0_Cs_Ls_Cp_Lp(
     # 1) Source voltage
     Vs = float(V_app_func(t))
 
-    # 2) Plasma conduction current
+    # 2) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 3) Geometric gap capacitance
@@ -1072,7 +1072,7 @@ def update_circuit_R0_Cs_Ls_Cp_Lp_Rm(
     # 1) Source voltage
     Vs = float(V_app_func(t))
 
-    # 2) Plasma conduction current
+    # 2) Plasma transport current
     I_transport = _compute_transport_current(Gamma_i, Gamma_e, dx, A, L)
 
     # 3) Geometric gap capacitance

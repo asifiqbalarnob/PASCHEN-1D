@@ -596,3 +596,126 @@ def plot_selected_spatial_group(
     if savepath is not None:
         fig.savefig(savepath, dpi=600)
     plt.show()
+
+
+def plot_averaged_spatial_quantity(
+    x: np.ndarray,
+    quantity: str,
+    profile: np.ndarray,
+    averaging_label: str,
+    x_unit: str = "mm",
+    savepath: str | None = None,
+) -> None:
+    """
+    Plot one time-averaged spatial diagnostic profile.
+
+    The input profile is already averaged over the selected time window or
+    over the requested number of RF cycles.
+    """
+    if x_unit == "mm":
+        x_plot = x * 1e3
+        xlabel = "x [mm]"
+    elif x_unit == "cm":
+        x_plot = x * 1e2
+        xlabel = "x [cm]"
+    else:
+        x_plot = x
+        xlabel = "x [m]"
+
+    ylabel_map = {
+        "ne": "n_e [m$^{-3}$]",
+        "ni": "n_i [m$^{-3}$]",
+        "phi": "Potential [V]",
+        "E": "Electric Field [V/m]",
+        "Gamma_i": "Gamma_i [m$^{-2}$ s$^{-1}$]",
+        "Gamma_e": "Gamma_e [m$^{-2}$ s$^{-1}$]",
+        "townsend_alpha": "Townsend alpha [m$^{-1}$]",
+        "nu_i": "nu_i [s$^{-1}$]",
+        "S": "S [m$^{-3}$ s$^{-1}$]",
+    }
+
+    fig, ax = plt.subplots(figsize=(4.2, 3.0))
+    ax.plot(x_plot, profile, label=quantity)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel_map.get(quantity, quantity))
+    ax.set_title(f"{quantity} averaged profile")
+    ax.text(
+        0.02,
+        0.02,
+        averaging_label,
+        transform=ax.transAxes,
+        fontsize=8,
+        alpha=0.8,
+    )
+    ax.grid(True)
+    fig.tight_layout()
+    if savepath is not None:
+        fig.savefig(savepath, dpi=600)
+    plt.show()
+
+
+def plot_averaged_spatial_group(
+    x: np.ndarray,
+    quantities: tuple[str, ...],
+    profiles_map: dict[str, np.ndarray],
+    averaging_label: str,
+    x_unit: str = "mm",
+    savepath: str | None = None,
+) -> None:
+    """
+    Plot multiple time-averaged spatial profiles in one axes.
+    """
+    if len(quantities) == 0:
+        return
+
+    if x_unit == "mm":
+        x_plot = x * 1e3
+        xlabel = "x [mm]"
+    elif x_unit == "cm":
+        x_plot = x * 1e2
+        xlabel = "x [cm]"
+    else:
+        x_plot = x
+        xlabel = "x [m]"
+
+    ylabel_map = {
+        "ne": "Density [m$^{-3}$]",
+        "ni": "Density [m$^{-3}$]",
+        "phi": "Potential [V]",
+        "E": "Electric Field [V/m]",
+        "Gamma_i": "Gamma [m$^{-2}$ s$^{-1}$]",
+        "Gamma_e": "Gamma [m$^{-2}$ s$^{-1}$]",
+        "townsend_alpha": "Townsend alpha [m$^{-1}$]",
+        "nu_i": "nu_i [s$^{-1}$]",
+        "S": "S [m$^{-3}$ s$^{-1}$]",
+    }
+
+    fig, ax = plt.subplots(figsize=(4.3, 3.1))
+    ylabel = None
+    for q in quantities:
+        if q not in profiles_map:
+            continue
+        this_ylabel = ylabel_map.get(q, q)
+        if ylabel is None:
+            ylabel = this_ylabel
+        elif ylabel != this_ylabel:
+            ylabel = "Mixed units"
+        ax.plot(x_plot, profiles_map[q], label=q)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel if ylabel is not None else "Value")
+    ax.set_title(" + ".join(quantities))
+    ax.text(
+        0.02,
+        0.02,
+        averaging_label,
+        transform=ax.transAxes,
+        fontsize=8,
+        alpha=0.8,
+    )
+    ax.grid(True)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    if savepath is not None:
+        fig.savefig(savepath, dpi=600)
+    plt.show()

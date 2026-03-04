@@ -36,7 +36,93 @@ The solver creates `<run_name>/` and writes sampled data + metadata.
 `gamma` is the cathode ion-induced secondary electron yield used when
 `cathode_electron_boundary="electron_emission"`.
 
-## 3.2 Circuit Setup
+## 3.2 Coefficient Source Selection
+
+The active code now separates the governing fluid equations from the source
+used to supply the coefficients that appear in them.
+
+Transport sources:
+
+- `electron_transport_source`
+- `ion_transport_source`
+
+Ionization-coefficient source:
+
+- `townsend_alpha_source`
+
+Allowed source labels:
+
+- `user_defined_equations`
+- `swarm_data_table_interpolation`
+
+`user_defined_equations` uses the editable closures in `physics.py`. Those
+functions may return constant profiles or field-dependent profiles.
+
+`swarm_data_table_interpolation` currently supports the electron-side path:
+
+- `mu_e(E/N)`
+- `D_e(E/N)`
+- Townsend `alpha(E/N)` through tabulated `alpha/N`
+
+The bundled BOLSIG+-generated swarm-data files are used for the electron-side
+path. They do not provide ion transport coefficients, so the shipped example
+cases keep ion transport in the `user_defined_equations` path. The config
+schema still includes:
+
+- `ion_swarm_data_path`
+- `ion_swarm_data_gas`
+
+so externally supplied ion swarm-data sources can be referenced through the
+same interface.
+
+Swarm-data file controls:
+
+- `electron_swarm_data_path`
+- `electron_swarm_data_gas`
+- `ion_swarm_data_path`
+- `ion_swarm_data_gas`
+
+Optional dedicated Townsend-alpha overrides:
+
+- `townsend_alpha_swarm_data_path`
+- `townsend_alpha_swarm_data_gas`
+
+If the Townsend-alpha override fields are left as `None`, the code reuses the
+electron swarm-data source.
+
+### Adding A New Gas
+
+The `gas` field in the configuration is an internal PASCHEN-1D label. Changing `gas = "..."` by itself does not create support for a new gas. The same label must be used consistently anywhere the code selects gas-specific behavior.
+
+There are two supported extension paths:
+
+1. `user_defined_equations`
+- Update the user-defined coefficient closures in `PASCHEN-1D/physics.py`.
+- The main edit points are:
+  - `compute_user_defined_electron_mobility(...)`
+  - `compute_user_defined_ion_mobility(...)`
+  - `compute_user_defined_electron_diffusion(...)`
+  - `compute_user_defined_ion_diffusion(...)`
+  - `compute_user_defined_townsend_alpha(...)`
+  - `compute_user_defined_recombination_coefficient(...)`
+- If the default reference-state logic needs gas-specific baseline values, also update `build_transport_reference_state(...)`.
+- These user-defined functions may return either constant profiles or field-dependent spatial profiles.
+
+2. `swarm_data_table_interpolation`
+- Provide a compatible swarm-data file and point the configuration to it through:
+  - `electron_swarm_data_path`
+  - `electron_swarm_data_gas`
+- If Townsend alpha also uses swarm-data interpolation, either:
+  - leave `townsend_alpha_swarm_data_path` / `townsend_alpha_swarm_data_gas` as `None` to inherit from the electron swarm-data source, or
+  - set explicit Townsend-alpha overrides.
+- The `gas` label, `electron_swarm_data_gas`, and any Townsend-alpha swarm-data gas override must match exactly.
+
+Current implementation scope:
+- Electron mobility, electron diffusion, and Townsend alpha can use swarm-data interpolation.
+- The shipped examples keep ion transport in `user_defined_equations`, because the bundled swarm-data files only provide the electron-side quantities used by the current workflow. The config schema still includes `ion_swarm_data_path` and `ion_swarm_data_gas` so externally supplied ion swarm-data sources can be referenced when available.
+
+
+## 3.3 Circuit Setup
 
 Choose topology with `circuit_type`:
 
@@ -60,7 +146,7 @@ Set element values:
 
 For stiff parameter sets, use `"implicit_euler"`.
 
-## 3.3 Applied Voltage
+## 3.4 Applied Voltage
 
 - `waveform_type` in `{"step", "gaussian", "dc", "rf"}`
 - waveform-specific fields:
@@ -68,12 +154,12 @@ For stiff parameter sets, use `"implicit_euler"`.
   - gaussian: `V_peak`, `tau`, `t_peak`
   - rf: `V_peak`, `f_rf`, `V_dc`, `phi_rf`
 
-## 3.4 Grid and Numerics
+## 3.5 Grid and Numerics
 
 - `Nt`, `Nx`, `T_total`
 - `kt_limiter_theta`
 
-## 3.5 Boundary Modes
+## 3.6 Boundary Modes
 
 Per electrode and species:
 
@@ -107,7 +193,7 @@ Electron-emission mode is side-specific in the current implementation:
   - SEE can be constant (`anode_electron_induced_yield`) or Vaughan-based (`use_vaughan_sey=True`)
   - may include external emission flux at anode if enabled
 
-## 3.6 Volume Source Controls
+## 3.7 Volume Source Controls
 
 - `enable_volume_sources`
 - `enable_ionization_source`
@@ -115,7 +201,7 @@ Electron-emission mode is side-specific in the current implementation:
 
 These only affect volumetric continuity source terms (ionization/recombination).
 
-## 3.7 External Emission Controls
+## 3.8 External Emission Controls
 
 Master switches:
 
@@ -165,7 +251,45 @@ proxy computed from incoming normal electron drift and a fixed thermal term.
 
 This supports different anode/cathode materials and laser/emission settings.
 
-## 4. Emission Models in This Version
+## 4. Swarm-Data Files
+
+Bundled example swarm-data source files:
+
+- `ar_swarm_output.dat`
+- `n2_swarm_output.dat`
+
+These are raw swarm-data output files already in the format expected by the
+active parser. Additional compatible swarm-data files can be generated
+externally and referenced through the config.
+
+Accepted swarm-data file patterns:
+
+1. Raw swarm-data output containing the required named section(s):
+   - `Mobility *N (1/m/V/s)`
+   - `Diffusion coefficient *N (1/m/s)`
+   - `Townsend ioniz. coef. alpha/N (m2)`
+   In each section, the parser reads:
+   - column 1: `E/N` in `Td`
+   - column 2: the corresponding tabulated quantity
+
+2. A simple two-column table:
+   - column 1: `E/N [Td]`
+   - column 2: the requested quantity
+
+Expected second-column quantity for a two-column table:
+- electron transport source:
+  - `mu_e * N` for mobility
+  - `D_e * N` for diffusion
+- Townsend-alpha source:
+  - `alpha / N`
+
+Numerical requirements:
+- at least two data rows
+- strictly positive `E/N`
+- strictly positive `mu_e * N` and `D_e * N`
+- non-negative `alpha / N`
+
+## 5. Emission Models in This Version
 
 - `constant_J`
   - time-windowed constant current density
@@ -184,14 +308,15 @@ Important model split:
 - `use_vaughan_sey` applies only to anode electron-induced SEE.
 - Cathode SEE remains the constant-`gamma` model.
 
-## 5. Diagnostics Configuration
+## 6. Diagnostics Configuration
 
 Diagnostics are organized under:
 
 - `cfg.diagnostics.temporal`
 - `cfg.diagnostics.spatial`
+- `cfg.diagnostics.averaged_spatial`
 
-## 5.1 Temporal Diagnostics
+## 6.1 Temporal Diagnostics
 
 Select quantities:
 
@@ -204,7 +329,7 @@ Configure:
 - optional time window: `t_start`, `t_end`
 - optional file prefix: `savepath_prefix`
 
-## 5.2 Spatial Diagnostics
+## 6.2 Spatial Diagnostics
 
 Select quantities:
 
@@ -230,25 +355,64 @@ cfg.diagnostics.spatial.t_samples = (0.8e-6, 1.0e-6)
 cfg.diagnostics.spatial.x_unit = "cm"
 ```
 
-## 6. Postprocessing Without Rerun
+## 6.3 Averaged Spatial Diagnostics
+
+Use this family for CCP-style benchmarking when cycle-averaged or time-window
+averaged profiles are more meaningful than instantaneous snapshots.
+
+Supported quantity labels are the same spatial profile labels used by
+`cfg.diagnostics.spatial`, for example:
+
+- `ne`, `ni`, `phi`, `E`
+- `Gamma_i`, `Gamma_e`
+- `townsend_alpha`, `nu_i`, `S`
+
+Main controls:
+
+- `enabled`
+- `quantities`
+- optional grouped overlays: `plot_groups=((...),(...))`
+- `mode = "time_window"` or `mode = "last_n_cycles"`
+- `t_avg_start`, `t_avg_end` for `time_window`
+- `N_cycle_avg` for `last_n_cycles`
+- `x_unit`
+
+Example:
+
+```python
+cfg.diagnostics.averaged_spatial.enabled = True
+cfg.diagnostics.averaged_spatial.plot_groups = (("ne", "ni"), ("phi",), ("E",))
+cfg.diagnostics.averaged_spatial.mode = "last_n_cycles"
+cfg.diagnostics.averaged_spatial.N_cycle_avg = 10
+cfg.diagnostics.averaged_spatial.x_unit = "cm"
+```
+
+Important:
+- averaged spatial diagnostics are computed from the saved snapshot cadence
+  set by `save_every`
+- if the run is RF-driven, `save_every` should be fine enough to resolve the
+  RF waveform over the averaging window
+
+## 7. Postprocessing Without Rerun
 
 Use `paschen_1d_postprocess_driver.ipynb`:
 
 - picks any run folder containing `run_metadata.json`
 - replots directly from saved memmaps
 - allows changing units/scales/grouping/labels/titles/limits
+- supports averaged-spatial profile replots from saved runs
 - saves publication-quality figures to:
   - `<run_name>/postprocess_figures/`
 
-## 7. Case Templates
+## 8. Case Templates
 
-## 7.1 Zero-bias, no-activity baseline
+## 8.1 Zero-bias, no-activity baseline
 
 - `waveform_type="dc"`, `V_peak=0.0`
 - `enable_external_emission=False`
 - `enable_volume_sources=False`
 
-## 7.2 Cathode constant-J delayed turn-on
+## 8.2 Cathode constant-J delayed turn-on
 
 - `enable_external_emission=True`
 - `enable_cathode_external_emission=True`
@@ -257,7 +421,7 @@ Use `paschen_1d_postprocess_driver.ipynb`:
   - `shared_emission_J_const = ...`
   - `shared_emission_t_start = 0.5e-6`
 
-## 7.3 Mixed electrode emission
+## 8.3 Mixed electrode emission
 
 Example:
 
@@ -271,7 +435,7 @@ Set:
 - per-electrode enable switches ON
 - use `electrode_material_mode="separate"` if material/laser parameters differ.
 
-## 8. Outputs Written per Run
+## 9. Outputs Written per Run
 
 In `<run_name>/`:
 
@@ -285,7 +449,7 @@ In `<run_name>/`:
 - metadata:
   - `run_metadata.json`
 
-## 9. Common Setup Checks
+## 10. Common Setup Checks
 
 Before launching long runs:
 
@@ -296,7 +460,7 @@ Before launching long runs:
 3. Use implicit circuit scheme for stiff element choices.
 4. Start with modest `Nt/Nx` for smoke tests before production runs.
 
-## 10. Where to Extend Next
+## 11. Where to Extend Next
 
 - Add/adjust new emission mechanisms in `emission.py`.
 - Extend BC physics closures in `physics.py` and boundary orchestration in `numerics.py`.
