@@ -26,6 +26,7 @@ def _compute_transport_current(
     A: float,
     L: float,
 ) -> float:
+    """Compute the area-integrated plasma transport current from flux profiles."""
     flux_diff = Gamma_i - Gamma_e
     integral_flux = 0.5 * dx * (
         flux_diff[0] + flux_diff[-1] + 2.0 * np.add.reduce(flux_diff[1:-1])
@@ -34,6 +35,7 @@ def _compute_transport_current(
 
 
 def _dielectric_coeffs(l: float, eps_r: float, L: float) -> tuple[float, float]:
+    """Return the dielectric mapping coefficients used by coated-electrode circuits."""
     alpha_d = 1.0 + 2.0 * l / (eps_r * L)
     beta_d = (2.0 * e * l) / (eps0 * eps_r * L)
     return alpha_d, beta_d

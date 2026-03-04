@@ -47,9 +47,21 @@
   - `quantum_pulse`
 - Per-electrode emission model toggles (different model combinations on anode/cathode).
 - Shared vs separate electrode material/emission parameter sets.
+- Config-selectable coefficient sources:
+  - `user_defined_equations`
+  - `swarm_data_table_interpolation`
+- Electron-side swarm-data interpolation currently supports:
+  - `mu_e(E/N)`
+  - `D_e(E/N)`
+  - Townsend `alpha(E/N)` via tabulated `alpha/N`
+- The shipped examples keep ion transport in the `user_defined_equations` path
+  because the bundled BOLSIG+-generated swarm-data files do not provide ion
+  transport coefficients. The config schema still includes `ion_swarm_data_*`
+  fields so externally supplied ion swarm-data sources can be referenced.
 - Config-driven diagnostics:
   - temporal (with optional grouped overlays and time-window selection)
   - spatial (with optional grouped overlays and chosen snapshot times)
+  - averaged spatial (time-window averages or averages over the last `N` RF cycles)
 - Postprocessing notebook for unit/scale/title/legend/axis-limit edits and figure export.
 
 ## Quick Start
@@ -62,12 +74,26 @@
    - generates configured diagnostics
 3. Optional: open `paschen_1d_postprocess_driver.ipynb` to regenerate plots from saved data only.
 
+Bundled example swarm-data source files:
+- `ar_swarm_output.dat`
+- `n2_swarm_output.dat`
+
+Additional compatible swarm-data files can be generated externally and
+referenced through the config.
+
+
 ## Key Configuration Entry Points
 
 - Simulation identity and grid:
   - `run_name`, `L`, `A`, `Nt`, `Nx`, `T_total`
 - Gas and plasma:
   - `gas`, `p_Torr`, `T_e`, `T_i`, `gamma`, `anode_electron_induced_yield`, `n0`
+- Coefficient sources:
+  - `electron_transport_source`, `ion_transport_source`, `townsend_alpha_source`
+  - `electron_swarm_data_path`, `electron_swarm_data_gas`
+  - `ion_swarm_data_path`, `ion_swarm_data_gas`
+  - optional Townsend-alpha overrides:
+    `townsend_alpha_swarm_data_path`, `townsend_alpha_swarm_data_gas`
 - Circuit:
   - `circuit_type`, `circuit_time_scheme`, `R0`, `C_s`, `L_s`, `C_p`, `L_p`, `R_m`
 - Voltage waveform:
@@ -101,6 +127,35 @@ For each run, outputs are written to `<run_name>/`:
 - Metadata:
   - `run_metadata.json`
 
+## Swarm-Data File Format
+
+Accepted swarm-data file patterns:
+
+1. Raw swarm-data output containing the required named section(s):
+   - `Mobility *N (1/m/V/s)`
+   - `Diffusion coefficient *N (1/m/s)`
+   - `Townsend ioniz. coef. alpha/N (m2)`
+   In each section, PASCHEN-1D reads the first two numeric columns as:
+   - column 1: `E/N` in `Td`
+   - column 2: the corresponding tabulated quantity
+
+2. A two-column table with:
+   - column 1: `E/N [Td]`
+   - column 2: the requested quantity
+
+For two-column tables, the expected second-column quantity is:
+- electron transport source:
+  - `mu_e * N` for mobility
+  - `D_e * N` for diffusion
+- Townsend-alpha source:
+  - `alpha / N`
+
+Numerical requirements:
+- at least two data rows
+- strictly positive `E/N`
+- strictly positive `mu_e * N` and `D_e * N`
+- non-negative `alpha / N`
+
 ## Notes
 
 - The startup run summary prints the resolved setup (geometry, circuit, boundary modes, emission toggles, diagnostics window).
@@ -108,6 +163,12 @@ For each run, outputs are written to `<run_name>/`:
 - For stiff circuit parameter sets, prefer `circuit_time_scheme="implicit_euler"`.
 - `use_vaughan_sey` affects only the anode `electron_emission` boundary path.
 - Cathode SEE remains the constant-`gamma` model.
+- `swarm_data_table_interpolation` is used in the shipped package for electron
+  transport (`mu_e`, `D_e`) and the Townsend-ionization path. The bundled
+  BOLSIG+-generated files do not include ion transport coefficients, so the
+  provided example cases keep ion transport in the user-defined path. The
+  config schema already exposes `ion_swarm_data_path` / `ion_swarm_data_gas`
+  for externally supplied ion swarm-data sources.
 
 ## License and Citation
 

@@ -391,8 +391,10 @@ def set_boundary_condition_implicit(
     gamma: float,
     anode_electron_induced_yield: float,
     T_e_eV: float,
-    mu_i: float,
-    mu_e: float,
+    mu_i_anode: float,
+    mu_i_cathode: float,
+    mu_e_anode: float,
+    mu_e_cathode: float,
     dx: float,
     dt: float,
     Gamma_ext_anode: float = 0.0,
@@ -435,8 +437,11 @@ def set_boundary_condition_implicit(
         Anode electron-induced secondary electron emission yield.
     T_e_eV : float
         Electron temperature proxy in eV used for anode impact-energy proxy.
-    mu_i, mu_e : float
-        Ion/electron mobilities [m²/(V·s)].
+    mu_i_anode, mu_i_cathode : float
+        Local ion mobilities at the anode and cathode boundaries [m²/(V·s)].
+    mu_e_anode, mu_e_cathode : float
+        Local electron mobilities at the anode and cathode boundaries
+        [m²/(V·s)].
     dx : float
         Spatial step [m].
     dt : float
@@ -485,7 +490,7 @@ def set_boundary_condition_implicit(
             phi_inner=float(phi_curr[-2]),
             phi_inner2=float(phi_curr[-3]),
             gamma=gamma,
-            mu_i=mu_i,
+            mu_i=mu_i_cathode,
             dx=dx,
             dt=dt,
         )
@@ -506,7 +511,7 @@ def set_boundary_condition_implicit(
             phi_left=float(phi_curr[0]),
             phi_inner=float(phi_curr[1]),
             phi_inner2=float(phi_curr[2]),
-            mu_e=mu_e,
+            mu_e=mu_e_anode,
             dx=dx,
             dt=dt,
         )
@@ -518,8 +523,8 @@ def set_boundary_condition_implicit(
             gamma=gamma,
             anode_electron_induced_yield=anode_electron_induced_yield,
             ni_boundary=float(ni_next[0]),
-            mu_i=mu_i,
-            mu_e=mu_e,
+            mu_i=mu_i_anode,
+            mu_e=mu_e_anode,
             ne_inner=float(ne_next[1]),
             T_e_eV=T_e_eV,
             phi_boundary=float(phi_curr[0]),
@@ -547,8 +552,8 @@ def set_boundary_condition_implicit(
             gamma=gamma,
             anode_electron_induced_yield=anode_electron_induced_yield,
             ni_boundary=float(ni_next[-1]),
-            mu_i=mu_i,
-            mu_e=mu_e,
+            mu_i=mu_i_cathode,
+            mu_e=mu_e_cathode,
             ne_inner=float(ne_next[-2]),
             T_e_eV=T_e_eV,
             phi_boundary=float(phi_curr[-1]),
@@ -583,8 +588,8 @@ def set_boundary_condition_implicit(
 
 
 def CFL_test(
-    mu_e: float,
-    mu_i: float,
+    mu_e: float | np.ndarray,
+    mu_i: float | np.ndarray,
     E_next: np.ndarray,
     dt: float,
     dx: float,
@@ -604,8 +609,12 @@ def CFL_test(
 
     Parameters
     ----------
-    mu_e, mu_i : float
-        Electron and ion mobilities [m²/(V·s)].
+    mu_e : float or np.ndarray
+        Electron mobility [m²/(V·s)]. May be a scalar or a spatial profile
+        with shape matching `E_next`.
+    mu_i : float or np.ndarray
+        Ion mobility [m²/(V·s)]. May be a scalar or a spatial profile
+        with shape matching `E_next`.
     E_next : np.ndarray
         Electric field at the next time step [V/m], shape (Nx,).
     dt : float

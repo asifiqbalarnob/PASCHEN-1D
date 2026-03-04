@@ -1,23 +1,25 @@
 """
-config.py
+config_nitrogen_pulsed_discharge.py
 
-Configuration data structures for the 1D pulsed-discharge
-drift-diffusion-Poisson solver (PASCHEN-1D).
+Full nitrogen pulsed-discharge example configuration synced to the current PASCHEN-1D schema.
 
 This module is meant to be the *single source of truth* for all high-level
-simulation parameters:
+simulation parameters. The main `SimulationConfig` groups appear in the same
+order that users typically scan the file:
 
-    - Geometry and gas/plasma properties
-    - External circuit topology and component values
-    - Applied voltage waveform (step, Gaussian, DC, RF)
-    - Time/space discretization and numerical scheme
-    - Emission model parameters
-    - Basic containers for output (SimulationState) and transport data
-      (TransportCoeffs)
+    - Run identification / labeling
+    - Geometry and electrodes
+    - Plasma / gas parameters
+    - External circuit configuration
+    - Temporal / waveform setup
+    - Discretization and numerics
+    - Boundary and source controls
+    - Emission models
+    - Output / diagnostics controls
 
-The idea is that a user can configure and run many different physical scenarios
-by modifying only this file (or constructing `SimulationConfig` instances in
-Python) without touching the core numerics.
+Basic containers for output (`SimulationState`), transport references
+(`TransportCoeffs`), and diagnostics configuration are defined above the main
+config so the entire schema remains in one file.
 """
 
 from dataclasses import dataclass, field
@@ -37,8 +39,8 @@ BoundaryMode = Literal["zero_density", "electron_emission", "implicit_drift_clos
 
 #: Allowed circuit time-integration schemes.
 CircuitTimeScheme = Literal["explicit_euler", "implicit_euler"]
-
 ElectrodeMaterialMode = Literal["shared", "separate"]
+TransportSourceMode = Literal["user_defined_equations", "swarm_data_table_interpolation"]
 
 #: Allowed external circuit topologies (see circuit.py for details).
 CircuitType = Literal[
@@ -52,7 +54,6 @@ CircuitType = Literal[
     "R0_Cs_Ls_Cp_Lp",         # Vs -- R0 -- Cs -- Ls -- (node) -- [Cp || Lp || plasma]
     "R0_Cs_Ls_Cp_Lp_Rm",      # Vs -- R0 -- Cs -- Ls -- (node) -- [Cp || Lp || (Rm + plasma)]
 ]
-
 
 
 TemporalDiagnosticQuantity = Literal[
@@ -73,9 +74,9 @@ SpatialDiagnosticQuantity = Literal[
     "townsend_alpha",
     "nu_i",
     "S",
-    "S_i",
-    "S_e",
 ]
+
+AveragedSpatialMode = Literal["time_window", "last_n_cycles"]
 
 
 @dataclass
@@ -97,9 +98,9 @@ class TemporalDiagnosticsConfig:
     )
     # Optional grouped plotting.
     # Example:
-    plot_groups = (("V_app", "V_gap"), ("I_discharge",), ("particle_inventory",),)
+    #   plot_groups = (("V_app", "V_gap"), ("I_discharge",),)
     # If None, each quantity in `quantities` is plotted separately.
-#     plot_groups: tuple[tuple[TemporalDiagnosticQuantity, ...], ...] | None = None
+    plot_groups: tuple[tuple[TemporalDiagnosticQuantity, ...], ...] | None = None
     # None means full simulation range.
     # Example: t_start = 0.5e-6 (do not use quotes).
     t_start: float | None = None
@@ -121,7 +122,6 @@ class SpatialDiagnosticsConfig:
     """
     enabled: bool = True
     quantities: tuple[SpatialDiagnosticQuantity, ...] = ("ne", "E")
-    
     # Optional grouped plotting.
     # Example:
     #   plot_groups = (("ne", "ni"), ("phi",), ("E",),)
@@ -129,10 +129,41 @@ class SpatialDiagnosticsConfig:
     plot_groups: tuple[tuple[SpatialDiagnosticQuantity, ...], ...] | None = None
     # None means final time only.
     # Example tuple syntax:
-    t_samples = (80e-9, 86e-9, 87e-9, 88e-9, 89e-9, 90e-9)
+    #   t_samples = (80e-9, 86e-9, 87e-9, 88e-9, 89e-9, 90e-9)
     # A single time still needs a trailing comma:
     #   t_samples = (0.5e-6,)
-#     t_samples: tuple[float, ...] | None = None
+    t_samples: tuple[float, ...] | None = None
+    x_unit: Literal["m", "cm", "mm"] = "cm"
+    # If provided, figures are saved as "<prefix>_<quantity>.pdf".
+    savepath_prefix: str | None = None
+
+
+@dataclass
+class AveragedSpatialDiagnosticsConfig:
+    """
+    Post-run time-averaged spatial diagnostics.
+
+    These diagnostics form spatial profiles by averaging saved snapshots over
+    a selected time interval. They are intended for CCP-style benchmarking,
+    where cycle-averaged density, potential, and field profiles are often more
+    informative than single instantaneous snapshots.
+    """
+    enabled: bool = False
+    quantities: tuple[SpatialDiagnosticQuantity, ...] = ("ne", "ni", "phi", "E")
+    # Optional grouped plotting.
+    # Example:
+    #   plot_groups = (("ne", "ni"), ("phi",), ("E",),)
+    # If None, each quantity in `quantities` is plotted separately.
+    plot_groups: tuple[tuple[SpatialDiagnosticQuantity, ...], ...] | None = None
+    # Averaging mode:
+    #   - "time_window": average over [t_avg_start, t_avg_end]
+    #   - "last_n_cycles": average over the last N_cycle_avg RF cycles
+    mode: AveragedSpatialMode = "time_window"
+    # Used when mode == "time_window". None means use the full saved range.
+    t_avg_start: float | None = None
+    t_avg_end: float | None = None
+    # Used when mode == "last_n_cycles". Must be > 0.
+    N_cycle_avg: int = 1
     x_unit: Literal["m", "cm", "mm"] = "cm"
     # If provided, figures are saved as "<prefix>_<quantity>.pdf".
     savepath_prefix: str | None = None
@@ -152,10 +183,16 @@ class DiagnosticsConfig:
     - `spatial.plot_groups`: optional grouped spatial overlays.
       Example: `(("ne", "ni"), ("phi",), ("E",),)`
     - `spatial.t_samples`: requested times [s]; None plots final-time snapshot.
+    - `averaged_spatial.quantities`: choose fields/profiles to average over a
+      time window or over the last N RF cycles.
+    - `averaged_spatial.mode`: "time_window" or "last_n_cycles".
     - `*_savepath_prefix`: optional output prefix for saved figures.
     """
     temporal: TemporalDiagnosticsConfig = field(default_factory=TemporalDiagnosticsConfig)
     spatial: SpatialDiagnosticsConfig = field(default_factory=SpatialDiagnosticsConfig)
+    averaged_spatial: AveragedSpatialDiagnosticsConfig = field(
+        default_factory=AveragedSpatialDiagnosticsConfig
+    )
 
 # ---------------------------------------------------------------------------
 # High-level configuration for a single simulation run
@@ -185,7 +222,7 @@ class SimulationConfig:
     # Run identification / labeling
     # ----------------------------------------------------------------------
     #: Optional label used in file naming, plots, etc.
-    run_name: str = "nitrogen_pulsed_discharge"
+    run_name: str = "nitrogen_pulsed_discharge_nonuniform_mobility_update_stage_3"
 
     # ----------------------------------------------------------------------
     # Geometry and electrodes
@@ -193,7 +230,7 @@ class SimulationConfig:
     #: Gap length [m] between electrodes (plasma domain length).
     L: float = 1.0e-2
     #: Electrode area [m²] (used in current / capacitance calculations).
-    A: float = 10e-4
+    A: float = 1.0e-3
     #: Dielectric thickness near each electrode [m]. l = 0 → bare electrodes.
     l: float = 1.75e-3
     #: Relative permittivity of the dielectric (dimensionless).
@@ -202,6 +239,7 @@ class SimulationConfig:
     # ----------------------------------------------------------------------
     # Plasma / gas parameters
     # ----------------------------------------------------------------------
+    # Gas state / background thermodynamic inputs.
     #: Gas species name (currently used for lookup of transport, alpha(E/p), etc.).
     gas: str = "nitrogen"  # e.g. "argon", "nitrogen" (extend as needed)
     #: Gas pressure [Torr].
@@ -210,25 +248,52 @@ class SimulationConfig:
     T_e: float = 11600.0
     #: Ion temperature [K] (typically room temperature).
     T_i: float = 300.0
-    #: Cathode ion-induced secondary electron yield (SEY) coefficient gamma.
-    gamma: float = 0.3
 
-    #: Anode electron-induced secondary emission yield (delta_ae).
-    anode_electron_induced_yield: float = 0.0
-    #: Enable Vaughan model for anode electron-induced secondary emission
-    #: when anode_electron_boundary = "electron_emission".
-    use_vaughan_sey: bool = False
-    #: Vaughan baseline energy at maximum yield [eV] for anode SEE model.
-    vaughan_Emax0_eV: float = 400.0
-    #: Vaughan baseline maximum secondary electron yield for anode SEE model.
-    vaughan_dmax0: float = 3.2
-    #: Vaughan roughness coefficient for anode SEE model.
-    vaughan_ks: float = 1.0
-    #: Vaughan incidence-angle variable z for anode SEE model.
-    vaughan_z: float = 0.0
-    #: Vaughan threshold-offset energy E0 [eV] used in
-    #: w = (Ep - E0) / (Emax - E0) for anode SEE model.
-    vaughan_E0: float = 0.0
+    # Transport-model selection.
+    #: Electron transport source.
+    #: - "user_defined_equations": use the transport formulas implemented in
+    #:   physics.py. Edit those functions directly if you want a different
+    #:   empirical closure; they may return either uniform or x-dependent
+    #:   profiles.
+    #: - "swarm_data_table_interpolation": build transport from a swarm-data
+    #:   table or raw swarm-solver output file.
+    electron_transport_source: TransportSourceMode = "user_defined_equations"
+    #: Ion transport source.
+    #: For now, the implemented ion path is "user_defined_equations". If
+    #: "swarm_data_table_interpolation" is selected without a supported ion
+    #: table backend, the code falls back to the user-defined equations and
+    #: emits a runtime warning.
+    ion_transport_source: TransportSourceMode = "user_defined_equations"
+
+    # Swarm-data source-file settings.
+    #: Source file used when electron_transport_source =
+    #: "swarm_data_table_interpolation". Relative paths are resolved from the
+    #: project root directory that contains this config file.
+    electron_swarm_data_path: str = "n2_swarm_output.dat"
+    #: Gas species represented by the electron swarm-data source file. The
+    #: source is only used when this matches cfg.gas (case-insensitive).
+    electron_swarm_data_gas: str = "nitrogen"
+    #: Optional ion swarm-data source file. Keep None to use the
+    #: user-defined ion transport equations.
+    ion_swarm_data_path: str | None = None
+    #: Optional gas tag associated with the ion swarm-data source file.
+    ion_swarm_data_gas: str | None = None
+
+    # Reaction / ionization-coefficient selection.
+    #: Townsend ionization-coefficient source.
+    #: - "user_defined_equations": use the alpha(E, p) equations implemented
+    #:   in physics.py.
+    #: - "swarm_data_table_interpolation": interpolate alpha/N from the
+    #:   electron swarm-data source file and convert to alpha(x).
+    townsend_alpha_source: TransportSourceMode = "user_defined_equations"
+    #: Optional dedicated swarm-data source file for Townsend alpha. If None,
+    #: the code reuses electron_swarm_data_path.
+    townsend_alpha_swarm_data_path: str | None = None
+    #: Optional gas tag associated with the Townsend-alpha swarm-data source.
+    #: If None, the code reuses electron_swarm_data_gas.
+    townsend_alpha_swarm_data_gas: str | None = None
+
+    # Initial plasma state.
     #: Initial uniform plasma density [m⁻³] for both electrons and ions.
     n0: float = 1e13
 
@@ -300,24 +365,23 @@ class SimulationConfig:
     R_m: float = 0.0
 
     # ----------------------------------------------------------------------
-    # Global time horizon
+    # Temporal / waveform setup
     # ----------------------------------------------------------------------
+    # Global time horizon.
     #: Total simulation time [s].
-    T_total: float = 91e-9
+    T_total: float = 9.1e-8
 
-    # ----------------------------------------------------------------------
-    # Applied voltage waveform parameters
-    # ----------------------------------------------------------------------
+    # Applied voltage waveform parameters.
     #: Type of applied waveform ("step", "gaussian", "dc", "rf").
     waveform_type: VoltageWaveform = "gaussian"
 
     # --- Step/DC waveform parameters ---
     #: Peak or DC amplitude [V] (interpreted depending on waveform_type).
-    V_peak: float = 20e3
+    V_peak: float = 2.0e4
     #: Step ON time [s] (for "step" / pulsed waveforms).
     tV_start: float = 0e-6
     #: Step OFF time [s]. Default = full simulation window.
-    tV_end: float = T_total
+    tV_end: float = 9.1e-8
 
     # --- Gaussian waveform parameters ---
     #: Gaussian FWHM / width [s] (for "gaussian" waveform).
@@ -334,26 +398,24 @@ class SimulationConfig:
     phi_rf: float = 0.0
 
     # ----------------------------------------------------------------------
-    # Time discretization
+    # Discretization and numerics
     # ----------------------------------------------------------------------
+    # Time discretization.
     #: Number of time steps over T_total (dt = T_total / Nt).
     Nt: int = 91_000
 
-    # ----------------------------------------------------------------------
-    # Space discretization
-    # ----------------------------------------------------------------------
+    # Space discretization.
     #: Number of spatial grid points in the 1D domain [0, L].
     Nx: int = 1000
 
-    # ----------------------------------------------------------------------
-    # Numerics
-    # ----------------------------------------------------------------------
+    # Numerical scheme controls.
     #: KT slope-limiter parameter (theta >= 1; larger means less limiting).
     kt_limiter_theta: float = 1.01
 
     # ----------------------------------------------------------------------
-    # Boundary conditions
+    # Boundary and source controls
     # ----------------------------------------------------------------------
+    # Boundary conditions.
     #: Ion BC mode at anode (x=0).
     anode_ion_boundary: BoundaryMode = "zero_density"
     #: Electron BC mode at anode (x=0).
@@ -363,9 +425,7 @@ class SimulationConfig:
     #: Electron BC mode at cathode (x=L).
     cathode_electron_boundary: BoundaryMode = "electron_emission"
 
-    # ----------------------------------------------------------------------
-    # Source-term controls (for controlled tests / ablation studies)
-    # ----------------------------------------------------------------------
+    # Volumetric source-term controls (for controlled tests / ablation studies).
     #: Master switch for volumetric source terms in continuity equations.
     #: If False, both ionization and recombination are disabled regardless
     #: of the individual toggles below.
@@ -374,29 +434,40 @@ class SimulationConfig:
     enable_ionization_source: bool = True
     #: Enable recombination contribution (-beta * n_i * n_e).
     enable_recombination_sink: bool = True
-    #: Include emission-induced electron flux in circuit-current coupling.
-    enable_emission_in_circuit_current: bool = False
-    # ----------------------------------------------------------------------
-    # Output / logging controls
-    # ----------------------------------------------------------------------
-    #: Save data every `save_every` time steps.
-    save_every: int = 100
-    #: If True, write intermediate sampled fields (Gamma_i, Gamma_e, etc.).
-    log_intermediate: bool = True
-    #: Print startup run summary (geometry, numerics, circuit, diagnostics).
-    print_run_summary: bool = True
-    #: Print non-fatal config consistency warnings at startup.
-    warn_on_config_mismatch: bool = True
-    #: Diagnostics menu for post-run plots.
-    diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
 
     # ============================
     # Emission models
     # ============================
 
+    # Secondary-emission controls applied at the electrode boundaries.
+    #: Cathode ion-induced secondary electron yield (SEY) coefficient gamma.
+    gamma: float = 0.3
+
+    #: Anode electron-induced secondary emission yield (delta_ae).
+    anode_electron_induced_yield: float = 0.0
+    #: Enable Vaughan model for anode electron-induced secondary emission
+    #: when anode_electron_boundary = "electron_emission".
+    use_vaughan_sey: bool = False
+    #: Vaughan baseline energy at maximum yield [eV] for anode SEE model.
+    vaughan_Emax0_eV: float = 400.0
+    #: Vaughan baseline maximum secondary electron yield for anode SEE model.
+    vaughan_dmax0: float = 3.2
+    #: Vaughan roughness coefficient for anode SEE model.
+    vaughan_ks: float = 1.0
+    #: Vaughan incidence-angle variable z for anode SEE model.
+    vaughan_z: float = 0.0
+    #: Vaughan threshold-offset energy E0 [eV] used in
+    #: w = (Ep - E0) / (Emax - E0) for anode SEE model.
+    vaughan_E0: float = 0.0
+
+    # Circuit-current coupling for emitted electrons.
+    #: Include emission-induced electron flux in circuit-current coupling.
+    enable_emission_in_circuit_current: bool = False
+
+    # External-emission master toggles.
     #: Master switch for externally driven emission models.
     #: If False, emission model current density is disabled globally.
-    enable_external_emission: bool = True
+    enable_external_emission: bool = False
     #: Electrode parameter mapping mode for emission/material properties.
     #: - "shared": both electrodes use shared_* parameters.
     #: - "separate": anode_* and cathode_* parameters are used independently.
@@ -404,9 +475,9 @@ class SimulationConfig:
     #: Enable externally driven emission contribution at anode (x=0).
     enable_anode_external_emission: bool = False
     #: Enable externally driven emission contribution at cathode (x=L).
-    enable_cathode_external_emission: bool = True
+    enable_cathode_external_emission: bool = False
 
-    # Per-electrode, per-model external emission toggles.
+    # Per-electrode external-emission mechanism toggles.
     # Multiple enabled models on the same electrode are summed.
     # Anode (x=0)
     anode_enable_constant_J_emission: bool = False
@@ -417,12 +488,12 @@ class SimulationConfig:
     # Cathode (x=L)
     cathode_enable_constant_J_emission: bool = False
     cathode_enable_fn_emission: bool = False
-    cathode_enable_mg_emission: bool = True
+    cathode_enable_mg_emission: bool = False
     cathode_enable_rd_emission: bool = False
-    cathode_enable_quantum_pulse_emission: bool = True
+    cathode_enable_quantum_pulse_emission: bool = False
         
         
-    # --- Shared electrode material/emission parameters ---
+    # Shared electrode material/emission parameters.
     # Used when electrode_material_mode = "shared".
     shared_fn_work_function_eV: float = 4.5
     shared_fn_field_scale_factor: float = 1.0
@@ -437,12 +508,12 @@ class SimulationConfig:
     shared_emission_W_eV: float = 4.1
     shared_emission_Ef_eV: float = 11.7
 
-    # --- Shared constant-J controls ---
+    # Shared constant-J controls.
     shared_emission_J_const: float = 1.0e5
     shared_emission_t_start: float = 9.5e-6
     shared_emission_t_end: float = 10.5e-6
 
-    # --- Shared quantum-pulse controls ---
+    # Shared quantum-pulse controls.
     shared_emission_epsilon0_eV: float = 12.0
     shared_emission_k_ph: int = 14
     shared_laser_t0: float = 10e-6
@@ -457,7 +528,7 @@ class SimulationConfig:
     shared_laser_wx_m: float = 8.3e-3
     shared_laser_wy_m: float = 3.0e-3
 
-    # --- Per-electrode material/emission parameters ---
+    # Per-electrode material/emission parameters.
     # Used when electrode_material_mode = "separate".
     # Anode
     anode_fn_work_function_eV: float = 4.5
@@ -486,7 +557,7 @@ class SimulationConfig:
     cathode_emission_W_eV: float = 4.1
     cathode_emission_Ef_eV: float = 11.7
 
-    # --- Per-electrode constant-J controls (used in "separate" mode) ---
+    # Per-electrode constant-J controls (used in "separate" mode).
     anode_emission_J_const: float = 1.0e5
     anode_emission_t_start: float = 9.5e-6
     anode_emission_t_end: float = 10.5e-6
@@ -494,7 +565,7 @@ class SimulationConfig:
     cathode_emission_t_start: float = 9.5e-6
     cathode_emission_t_end: float = 10.5e-6
 
-    # --- Per-electrode quantum-pulse controls (used in "separate" mode) ---
+    # Per-electrode quantum-pulse controls (used in "separate" mode).
     anode_emission_epsilon0_eV: float = 12.0
     anode_emission_k_ph: int = 14
     anode_laser_t0: float = 10e-6
@@ -526,6 +597,33 @@ class SimulationConfig:
 # ---------------------------------------------------------------------------
 # Containers for outputs and transport coefficients
 # ---------------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
+    # Output / diagnostics controls
+    # ----------------------------------------------------------------------
+    #: Save data every `save_every` time steps.
+    save_every: int = 100
+    #: If True, write intermediate sampled fields (Gamma_i, Gamma_e, etc.).
+    log_intermediate: bool = True
+    #: Print startup run summary (geometry, numerics, circuit, diagnostics).
+    print_run_summary: bool = True
+    #: Print non-fatal config consistency warnings at startup.
+    warn_on_config_mismatch: bool = True
+    #: Diagnostics menu for post-run plots.
+    diagnostics: DiagnosticsConfig = field(
+        default_factory=lambda: DiagnosticsConfig(
+            temporal=TemporalDiagnosticsConfig(),
+            spatial=SpatialDiagnosticsConfig(
+                enabled=True,
+                quantities=("ne", "E"),
+                plot_groups=None,
+                t_samples=None,
+                x_unit="cm",
+                savepath_prefix=None,
+            ),
+            averaged_spatial=AveragedSpatialDiagnosticsConfig(),
+        )
+    )
 
 
 @dataclass
@@ -575,7 +673,7 @@ class SimulationState:
 @dataclass
 class TransportCoeffs:
     """
-    Container for basic transport and reaction coefficients.
+    Container for baseline transport and reaction coefficients.
 
     These are typically computed from the chosen gas, pressure, and
     temperature(s) and then used throughout the drift–diffusion update.
@@ -591,7 +689,11 @@ class TransportCoeffs:
     D_i : float
         Ion diffusion coefficient [m²/s].
     beta : float
-        Effective recombination or attachment coefficient [m³/s] (if used).
+        Baseline volumetric recombination / loss coefficient [m³/s].
+    neutral_density : float
+        Background neutral gas number density [m⁻³], treated as a fixed
+        uniform reservoir in the current model. This is evaluated from the
+        configured gas pressure and the closure assumption T_gas = T_i.
     pr : float
         Pressure-related scaling parameter (e.g. p·r or other combination),
         kept generic as "pr" for now.
@@ -605,6 +707,7 @@ class TransportCoeffs:
     D_e: float
     D_i: float
     beta: float
+    neutral_density: float
     pr: float
     T_e_eV: float
     T_i_eV: float

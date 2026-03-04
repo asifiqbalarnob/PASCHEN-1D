@@ -1,8 +1,8 @@
 """
 postprocess.py
 
-Post-processing helpers to regenerate plots from saved run files without
-rerunning the simulation.
+Post-processing helpers to regenerate temporal, spatial, and averaged-spatial
+plots from saved run files without rerunning the simulation.
 """
 
 from dataclasses import dataclass
@@ -27,6 +27,8 @@ SpatialQuantity = Literal[
     "S",
 ]
 
+AveragedSpatialMode = Literal["time_window", "last_n_cycles"]
+
 
 @dataclass
 class TemporalReplotStyle:
@@ -45,6 +47,7 @@ class SpatialReplotStyle:
 
 
 def _time_scale(unit: str) -> tuple[float, str]:
+    """Return the multiplicative scale and axis label for a requested time unit."""
     if unit == "s":
         return 1.0, "Time [s]"
     if unit == "ms":
@@ -55,6 +58,7 @@ def _time_scale(unit: str) -> tuple[float, str]:
 
 
 def _x_scale(unit: str) -> tuple[float, str]:
+    """Return the multiplicative scale and axis label for a requested position unit."""
     if unit == "m":
         return 1.0, "x [m]"
     if unit == "cm":
@@ -63,6 +67,7 @@ def _x_scale(unit: str) -> tuple[float, str]:
 
 
 def load_run_metadata(run_name: str) -> dict:
+    """Load and return the metadata dictionary for a saved run directory."""
     path = Path(run_name) / "run_metadata.json"
     if not path.exists():
         raise FileNotFoundError(f"Metadata file not found: {path}")
@@ -70,6 +75,7 @@ def load_run_metadata(run_name: str) -> dict:
 
 
 def _v_app_from_metadata(time: np.ndarray, meta: dict) -> np.ndarray:
+    """Reconstruct the applied-voltage waveform from saved metadata on a given time array."""
     waveform_type = meta["waveform_type"]
     if waveform_type == "dc":
         return meta["V_peak"] * np.ones_like(time)
@@ -87,10 +93,12 @@ def _v_app_from_metadata(time: np.ndarray, meta: dict) -> np.ndarray:
 
 
 def _read_time_series(run_dir: Path, name: str, Nt: int) -> np.ndarray:
+    """Return a memory-mapped scalar time-history array from a saved run folder."""
     return np.memmap(run_dir / name, mode="r", dtype=np.float32, shape=(Nt,))
 
 
 def _spatial_paths(run_dir: Path) -> dict[str, Path]:
+    """Return the standard sampled-field file paths for a saved run directory."""
     return {
         "ne": run_dir / "ne_sampled_mm.dat",
         "ni": run_dir / "ni_sampled_mm.dat",
@@ -109,9 +117,14 @@ def replot_from_saved(
     *,
     temporal_groups: tuple[tuple[TemporalQuantity, ...], ...] | None = None,
     spatial_groups: tuple[tuple[SpatialQuantity, ...], ...] | None = None,
+    averaged_spatial_groups: tuple[tuple[SpatialQuantity, ...], ...] | None = None,
     t_start: float | None = None,
     t_end: float | None = None,
     t_samples: tuple[float, ...] | None = None,
+    averaged_mode: AveragedSpatialMode = "time_window",
+    t_avg_start: float | None = None,
+    t_avg_end: float | None = None,
+    N_cycle_avg: int = 1,
     temporal_style: TemporalReplotStyle | None = None,
     spatial_style: SpatialReplotStyle | None = None,
 ) -> None:
@@ -301,6 +314,98 @@ def replot_from_saved(
         ax.set_yscale(spatial_style.yscale)
         ax.set_title(" + ".join(group))
         ax.grid(True)
+        if len(ax.lines) <= 12:
+            ax.legend(frameon=False)
+        fig.tight_layout()
+        plt.show()
+
+    # ---------- Averaged Spatial ----------
+    if averaged_spatial_groups is None:
+        averaged_spatial_groups = (("ne", "ni"), ("phi",), ("E",))
+
+    if averaged_mode == "last_n_cycles":
+        if meta["waveform_type"] != "rf":
+            print("Averaged spatial diagnostics skipped: 'last_n_cycles' requires waveform_type='rf'.")
+            return
+        f_rf = float(meta["f_rf"])
+        if f_rf <= 0.0:
+            print("Averaged spatial diagnostics skipped: f_rf must be positive for 'last_n_cycles'.")
+            return
+        n_cycles = max(int(N_cycle_avg), 1)
+        t_window_end = float(saved_times[-1])
+        t_window_start = t_window_end - n_cycles / f_rf
+        averaging_label = f"Average over last {n_cycles} RF cycle(s)"
+    else:
+        t_window_start = float(saved_times[0]) if t_avg_start is None else float(t_avg_start)
+        t_window_end = float(saved_times[-1]) if t_avg_end is None else float(t_avg_end)
+        if t_window_end < t_window_start:
+            t_window_start, t_window_end = t_window_end, t_window_start
+        averaging_label = f"Average over [{t_window_start:.3e}, {t_window_end:.3e}] s"
+
+    avg_mask = (saved_times >= t_window_start) & (saved_times <= t_window_end)
+    if not np.any(avg_mask):
+        print("Averaged spatial diagnostics skipped: empty averaging window in saved snapshots.")
+        return
+
+    for group in averaged_spatial_groups:
+        if len(group) == 0:
+            continue
+
+        fig, ax = plt.subplots(figsize=spatial_style.figsize)
+        ylabel = None
+        has_curve = False
+
+        for q in group:
+            arr = sampled_arrays.get(q)
+            if arr is None:
+                print(f"Averaged spatial quantity '{q}' missing in saved files; skipping.")
+                continue
+
+            avg_profile = np.mean(np.asarray(arr[avg_mask], dtype=np.float64), axis=0)
+            if q in ("ne", "ni"):
+                ylab = "Density [m$^{-3}$]"
+            elif q == "phi":
+                ylab = "Potential [V]"
+            elif q == "E":
+                ylab = "Electric Field [V/m]"
+            elif q in ("Gamma_i", "Gamma_e"):
+                ylab = "Gamma [m$^{-2}$ s$^{-1}$]"
+            elif q == "townsend_alpha":
+                ylab = "Townsend alpha [m$^{-1}$]"
+            elif q == "nu_i":
+                ylab = "nu_i [s$^{-1}$]"
+            else:
+                ylab = "Source [m$^{-3}$ s$^{-1}$]"
+
+            if ylabel is None:
+                ylabel = ylab
+            elif ylabel != ylab:
+                ylabel = "Mixed units"
+
+            ax.plot(x_plot, avg_profile, label=q)
+            has_curve = True
+
+        if not has_curve:
+            plt.close(fig)
+            print(f"Averaged spatial group {group} has no available curves.")
+            continue
+
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(ylabel if ylabel is not None else "Value")
+        ax.set_xscale(spatial_style.xscale)
+        ax.set_yscale(spatial_style.yscale)
+        ax.set_title(" + ".join(group) + " (averaged)")
+        ax.grid(True)
+        ax.text(
+            0.02,
+            0.98,
+            averaging_label,
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
+            bbox={"facecolor": "white", "alpha": 0.75, "edgecolor": "none"},
+        )
         if len(ax.lines) <= 12:
             ax.legend(frameon=False)
         fig.tight_layout()
