@@ -14,7 +14,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-TemporalQuantity = Literal["V_app", "V_gap", "I_discharge", "cfl", "particle_inventory"]
+TemporalQuantity = Literal[
+    "V_app",
+    "V_gap",
+    "I_discharge",
+    "cfl",
+    "picard_iterations",
+    "adaptive_substeps",
+    "adaptive_dt_sub",
+    "adaptive_cfl_est",
+    "particle_inventory",
+]
 SpatialQuantity = Literal[
     "ne",
     "ni",
@@ -24,7 +34,10 @@ SpatialQuantity = Literal[
     "Gamma_e",
     "townsend_alpha",
     "nu_i",
+    "S_ion",
     "S",
+    "mu_e",
+    "D_e",
 ]
 
 AveragedSpatialMode = Literal["time_window", "last_n_cycles"]
@@ -108,7 +121,10 @@ def _spatial_paths(run_dir: Path) -> dict[str, Path]:
         "Gamma_e": run_dir / "Gamma_e_sampled_mm.dat",
         "townsend_alpha": run_dir / "townsend_alpha_sampled_mm.dat",
         "nu_i": run_dir / "nu_i_sampled_mm.dat",
+        "S_ion": run_dir / "S_ion_sampled_mm.dat",
         "S": run_dir / "S_sampled_mm.dat",
+        "mu_e": run_dir / "mu_e_sampled_mm.dat",
+        "D_e": run_dir / "D_e_sampled_mm.dat",
     }
 
 
@@ -127,6 +143,8 @@ def replot_from_saved(
     N_cycle_avg: int = 1,
     temporal_style: TemporalReplotStyle | None = None,
     spatial_style: SpatialReplotStyle | None = None,
+    valid_end_idx: int | None = None,
+    valid_nsave: int | None = None,
 ) -> None:
     """
     Regenerate diagnostics from saved files in <run_name>/.
@@ -147,7 +165,12 @@ def replot_from_saved(
     temporal_style = temporal_style or TemporalReplotStyle()
     spatial_style = spatial_style or SpatialReplotStyle()
 
-    time = np.linspace(0.0, T_total, Nt, dtype=np.float64)
+    time_full = np.linspace(0.0, T_total, Nt, dtype=np.float64)
+    if valid_end_idx is None:
+        Nt_valid = Nt
+    else:
+        Nt_valid = max(1, min(int(valid_end_idx) + 1, Nt))
+    time = time_full[:Nt_valid]
     x = np.linspace(0.0, L, Nx, dtype=np.float64)
 
     # ---------- Temporal ----------
@@ -156,6 +179,8 @@ def replot_from_saved(
             ("V_app", "V_gap"),
             ("I_discharge",),
             ("cfl",),
+            ("picard_iterations",),
+            ("adaptive_substeps",),
             ("particle_inventory",),
         )
 
@@ -168,22 +193,47 @@ def replot_from_saved(
 
     temporal_values = {
         "V_app": _v_app_from_metadata(time, meta),
-        "V_gap": np.asarray(_read_time_series(run_dir, "Vgap_mm.dat", Nt), dtype=np.float64),
+        "V_gap": np.asarray(_read_time_series(run_dir, "Vgap_mm.dat", Nt), dtype=np.float64)[:Nt_valid],
         "I_discharge": np.asarray(
             _read_time_series(run_dir, "Idischarge_mm.dat", Nt), dtype=np.float64
-        ),
-        "cfl": np.asarray(_read_time_series(run_dir, "c_cfl_mm.dat", Nt), dtype=np.float64),
+        )[:Nt_valid],
+        "cfl": np.asarray(_read_time_series(run_dir, "c_cfl_mm.dat", Nt), dtype=np.float64)[:Nt_valid],
     }
+    adaptive_substeps_path = run_dir / "adaptive_substeps_mm.dat"
+    adaptive_dt_sub_path = run_dir / "adaptive_dt_sub_mm.dat"
+    adaptive_cfl_est_path = run_dir / "adaptive_cfl_est_mm.dat"
+    picard_iterations_path = run_dir / "picard_iterations_mm.dat"
+    if adaptive_substeps_path.exists():
+        temporal_values["adaptive_substeps"] = np.asarray(
+            _read_time_series(run_dir, "adaptive_substeps_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
+    if adaptive_dt_sub_path.exists():
+        temporal_values["adaptive_dt_sub"] = np.asarray(
+            _read_time_series(run_dir, "adaptive_dt_sub_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
+    if adaptive_cfl_est_path.exists():
+        temporal_values["adaptive_cfl_est"] = np.asarray(
+            _read_time_series(run_dir, "adaptive_cfl_est_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
+    if picard_iterations_path.exists():
+        temporal_values["picard_iterations"] = np.asarray(
+            _read_time_series(run_dir, "picard_iterations_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
 
     # Particle inventory uses saved density snapshots.
-    nsave = int((Nt - 1) // save_every + 1)
+    nsave_total = int((Nt - 1) // save_every + 1)
+    nsave = nsave_total if valid_nsave is None else max(1, min(int(valid_nsave), nsave_total))
     saved_indices = np.arange(nsave, dtype=np.int64) * save_every
     saved_indices = np.minimum(saved_indices, Nt - 1)
-    saved_times = time[saved_indices]
-    ne_sampled = np.memmap(run_dir / "ne_sampled_mm.dat", mode="r", dtype=np.float32, shape=(nsave, Nx))
-    ni_sampled = np.memmap(run_dir / "ni_sampled_mm.dat", mode="r", dtype=np.float32, shape=(nsave, Nx))
-    N_e = A * np.trapz(np.asarray(ne_sampled, dtype=np.float64), x=x, axis=1)
-    N_i = A * np.trapz(np.asarray(ni_sampled, dtype=np.float64), x=x, axis=1)
+    saved_times = time_full[saved_indices]
+    ne_sampled = np.memmap(
+        run_dir / "ne_sampled_mm.dat", mode="r", dtype=np.float32, shape=(nsave_total, Nx)
+    )
+    ni_sampled = np.memmap(
+        run_dir / "ni_sampled_mm.dat", mode="r", dtype=np.float32, shape=(nsave_total, Nx)
+    )
+    N_e = A * np.trapz(np.asarray(ne_sampled[:nsave], dtype=np.float64), x=x, axis=1)
+    N_i = A * np.trapz(np.asarray(ni_sampled[:nsave], dtype=np.float64), x=x, axis=1)
 
     for group in temporal_groups:
         if len(group) == 0:
@@ -231,6 +281,14 @@ def replot_from_saved(
             elif q == "I_discharge":
                 y = y * 1e3
                 ylab = "Current [mA]"
+            elif q == "adaptive_substeps":
+                ylab = "Substeps per macro step"
+            elif q == "adaptive_dt_sub":
+                ylab = "Substep dt [s]"
+            elif q == "adaptive_cfl_est":
+                ylab = "Estimated macro CFL"
+            elif q == "picard_iterations":
+                ylab = "Picard iterations per macro step"
             else:
                 ylab = "CFL number"
             if ylabel is None:
@@ -259,7 +317,7 @@ def replot_from_saved(
     sampled_arrays: dict[str, np.ndarray] = {}
     for q, p in paths.items():
         if p.exists():
-            sampled_arrays[q] = np.memmap(p, mode="r", dtype=np.float32, shape=(nsave, Nx))
+            sampled_arrays[q] = np.memmap(p, mode="r", dtype=np.float32, shape=(nsave_total, Nx))
 
     if t_samples is None:
         requested = np.array([saved_times[-1]], dtype=np.float64)
@@ -290,6 +348,10 @@ def replot_from_saved(
                 ylab = "Townsend alpha [m$^{-1}$]"
             elif q == "nu_i":
                 ylab = "nu_i [s$^{-1}$]"
+            elif q == "mu_e":
+                ylab = "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]"
+            elif q == "D_e":
+                ylab = "D_e [m$^2$ s$^{-1}$]"
             else:
                 ylab = "Source [m$^{-3}$ s$^{-1}$]"
             if ylabel is None:
@@ -361,7 +423,7 @@ def replot_from_saved(
                 print(f"Averaged spatial quantity '{q}' missing in saved files; skipping.")
                 continue
 
-            avg_profile = np.mean(np.asarray(arr[avg_mask], dtype=np.float64), axis=0)
+            avg_profile = np.mean(np.asarray(arr[:nsave][avg_mask], dtype=np.float64), axis=0)
             if q in ("ne", "ni"):
                 ylab = "Density [m$^{-3}$]"
             elif q == "phi":
@@ -374,6 +436,10 @@ def replot_from_saved(
                 ylab = "Townsend alpha [m$^{-1}$]"
             elif q == "nu_i":
                 ylab = "nu_i [s$^{-1}$]"
+            elif q == "mu_e":
+                ylab = "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]"
+            elif q == "D_e":
+                ylab = "D_e [m$^2$ s$^{-1}$]"
             else:
                 ylab = "Source [m$^{-3}$ s$^{-1}$]"
 

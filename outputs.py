@@ -8,8 +8,10 @@ This module handles:
 1. Creation of on-disk, memory-mapped arrays for:
    - Field snapshots (phi, E)
    - Species densities (n_e, n_i)
-   - Optional diagnostics (Gamma_i, Gamma_e, townsend_alpha, nu_i, S)
+   - Optional diagnostics (Gamma_i, Gamma_e, townsend_alpha, nu_i, S_ion, S,
+     mu_e, D_e)
    - Scalar time histories (V_gap, CFL, I_discharge)
+   - Adaptive-substepping time histories (substep count, dt_sub, CFL estimate)
 
 2. A small dataclass `OutputHandles` that collects references to all
    memmapped arrays so the main driver can pass them around easily.
@@ -20,7 +22,7 @@ This module handles:
 The design is deliberately simple: all arrays are row-major with
 shape (Nsave, Nx) for spatial snapshots or (Nt,) for scalars, using
 np.float32 to keep files compact. Files are created under a directory
-named after `cfg.run_name`.
+named after `cfg.run.run_name`.
 """
 
 from dataclasses import dataclass
@@ -62,14 +64,26 @@ class OutputHandles:
         Sampled Townsend ionization coefficients (optional).
     nu_i_sampled : np.ndarray or None
         Sampled ionization frequencies (optional).
+    S_ion_sampled : np.ndarray or None
+        Sampled ionization-only source term (+nu_i * n_e or +k_ion*N*n_e) (optional).
     S_sampled : np.ndarray or None
         Sampled source term (e.g., ionization − recombination) (optional).
+    mu_e_sampled : np.ndarray or None
+        Sampled local electron mobility [m^2/(V s)] (optional).
+    D_e_sampled : np.ndarray or None
+        Sampled local electron diffusion coefficient [m^2/s] (optional).
     V_gap : np.ndarray
         Time history of plasma gap voltage.
     c_cfl : np.ndarray
         Time history of CFL diagnostic values.
     I_discharge : np.ndarray
         Time history of discharge current.
+    adaptive_substeps : np.ndarray
+        Per-macro-step adaptive substep counts (1 when adaptive mode is off).
+    adaptive_dt_sub : np.ndarray
+        Effective per-macro-step substep size [s].
+    adaptive_cfl_est : np.ndarray
+        Pre-substep drift-CFL estimate at macro-step start.
     """
     phi_sampled: np.ndarray
     E_sampled: np.ndarray
@@ -79,10 +93,17 @@ class OutputHandles:
     Gamma_e_sampled: Optional[np.ndarray]
     townsend_alpha_sampled: Optional[np.ndarray]
     nu_i_sampled: Optional[np.ndarray]
+    S_ion_sampled: Optional[np.ndarray]
     S_sampled: Optional[np.ndarray]
+    mu_e_sampled: Optional[np.ndarray]
+    D_e_sampled: Optional[np.ndarray]
     V_gap: np.ndarray
     c_cfl: np.ndarray
     I_discharge: np.ndarray
+    picard_iterations: np.ndarray
+    adaptive_substeps: np.ndarray
+    adaptive_dt_sub: np.ndarray
+    adaptive_cfl_est: np.ndarray
 
 # ============================================================
 # Low-level file creation helper
@@ -142,12 +163,12 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
 
     This function:
     1. Computes the number of saved snapshots (Nsave) based on Nt and
-       cfg.save_every.
-    2. Creates a subdirectory named `cfg.run_name`.
+       cfg.output.save_every.
+    2. Creates a subdirectory named `cfg.run.run_name`.
     3. Creates zero-initialized memmap files for:
          - phi, E, n_e, n_i       (always)
-         - Gamma_i, Gamma_e, townsend_alpha, nu_i, S
-           (if cfg.log_intermediate is True)
+         - Gamma_i, Gamma_e, townsend_alpha, nu_i, S_ion, S, mu_e, D_e
+           (if cfg.output.log_intermediate is True)
          - V_gap, c_cfl, I_discharge (scalar time histories)
     4. Reopens those files in "readwrite" mode and wraps them in an
        OutputHandles dataclass.
@@ -175,13 +196,13 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     so that the code can save at indices 0, save_every, 2*save_every, ...
     up to (Nsave - 1)*save_every <= Nt - 1.
     """
-    SAVE_EVERY = cfg.save_every
-    LOG_INTERMEDIATE = cfg.log_intermediate
+    SAVE_EVERY = cfg.output.save_every
+    LOG_INTERMEDIATE = cfg.output.log_intermediate
 
     # Number of saved snapshots along time
     Nsave = int((Nt - 1) // SAVE_EVERY + 1)
 
-    outdir = Path(cfg.run_name)
+    outdir = Path(cfg.run.run_name)
     outdir.mkdir(exist_ok=True)
 
     # --- Field snapshot paths ---
@@ -195,13 +216,20 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     Gamma_e_path = outdir / "Gamma_e_sampled_mm.dat"
     townsend_alpha_path = outdir / "townsend_alpha_sampled_mm.dat"
     nu_i_path = outdir / "nu_i_sampled_mm.dat"
+    S_ion_path = outdir / "S_ion_sampled_mm.dat"
     S_path   = outdir / "S_sampled_mm.dat"
+    mu_e_path = outdir / "mu_e_sampled_mm.dat"
+    D_e_path = outdir / "D_e_sampled_mm.dat"
 
 
     # --- Scalar time histories ---
     Vgap_path = outdir / "Vgap_mm.dat"
     c_cfl_path = outdir / "c_cfl_mm.dat"
     Idis_path = outdir / "Idischarge_mm.dat"
+    picard_iterations_path = outdir / "picard_iterations_mm.dat"
+    adaptive_substeps_path = outdir / "adaptive_substeps_mm.dat"
+    adaptive_dt_sub_path = outdir / "adaptive_dt_sub_mm.dat"
+    adaptive_cfl_est_path = outdir / "adaptive_cfl_est_mm.dat"
 
     # --- Create files (zero-initialized) ---
     create_file(phi_path, (Nsave, Nx))
@@ -214,12 +242,19 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         create_file(Gamma_e_path, (Nsave, Nx))
         create_file(townsend_alpha_path, (Nsave, Nx))
         create_file(nu_i_path, (Nsave, Nx))
+        create_file(S_ion_path, (Nsave, Nx))
         create_file(S_path, (Nsave, Nx))
+        create_file(mu_e_path, (Nsave, Nx))
+        create_file(D_e_path, (Nsave, Nx))
 
 
     create_file(Vgap_path, (Nt,))
     create_file(c_cfl_path, (Nt,))
     create_file(Idis_path, (Nt,))
+    create_file(picard_iterations_path, (Nt,))
+    create_file(adaptive_substeps_path, (Nt,))
+    create_file(adaptive_dt_sub_path, (Nt,))
+    create_file(adaptive_cfl_est_path, (Nt,))
 
     # --- Open memmaps ---
     phi_sampled = np.memmap(phi_path, mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
@@ -232,13 +267,29 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         Gamma_e_sampled = np.memmap(Gamma_e_path, mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
         townsend_alpha_sampled   = np.memmap(townsend_alpha_path,   mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
         nu_i_sampled    = np.memmap(nu_i_path,    mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
+        S_ion_sampled   = np.memmap(S_ion_path,   mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
         S_sampled       = np.memmap(S_path,       mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
+        mu_e_sampled = np.memmap(mu_e_path, mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
+        D_e_sampled = np.memmap(D_e_path, mode="readwrite", dtype=np.float32, shape=(Nsave, Nx))
     else:
-        Gamma_i_sampled = Gamma_e_sampled = townsend_alpha_sampled = nu_i_sampled = S_sampled = None
+        Gamma_i_sampled = Gamma_e_sampled = townsend_alpha_sampled = nu_i_sampled = S_ion_sampled = S_sampled = None
+        mu_e_sampled = D_e_sampled = None
 
     V_gap = np.memmap(Vgap_path, mode="readwrite", dtype=np.float32, shape=(Nt,))
     c_cfl = np.memmap(c_cfl_path, mode="readwrite", dtype=np.float32, shape=(Nt,))
     I_discharge = np.memmap(Idis_path, mode="readwrite", dtype=np.float32, shape=(Nt,))
+    picard_iterations = np.memmap(
+        picard_iterations_path, mode="readwrite", dtype=np.float32, shape=(Nt,)
+    )
+    adaptive_substeps = np.memmap(
+        adaptive_substeps_path, mode="readwrite", dtype=np.float32, shape=(Nt,)
+    )
+    adaptive_dt_sub = np.memmap(
+        adaptive_dt_sub_path, mode="readwrite", dtype=np.float32, shape=(Nt,)
+    )
+    adaptive_cfl_est = np.memmap(
+        adaptive_cfl_est_path, mode="readwrite", dtype=np.float32, shape=(Nt,)
+    )
 
     return OutputHandles(
         phi_sampled=phi_sampled,
@@ -249,10 +300,17 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         Gamma_e_sampled=Gamma_e_sampled,
         townsend_alpha_sampled=townsend_alpha_sampled,
         nu_i_sampled=nu_i_sampled,
+        S_ion_sampled=S_ion_sampled,
         S_sampled=S_sampled,
+        mu_e_sampled=mu_e_sampled,
+        D_e_sampled=D_e_sampled,
         V_gap=V_gap,
         c_cfl=c_cfl,
         I_discharge=I_discharge,
+        picard_iterations=picard_iterations,
+        adaptive_substeps=adaptive_substeps,
+        adaptive_dt_sub=adaptive_dt_sub,
+        adaptive_cfl_est=adaptive_cfl_est,
     )
 
 
@@ -263,6 +321,9 @@ def write_run_metadata(
     Nx: int,
     dt: float,
     dx: float,
+    adaptive_stats: dict | None = None,
+    hotloop_stats: dict | None = None,
+    bc_poisson_picard_stats: dict | None = None,
 ) -> None:
     """
     Write lightweight run metadata for post-processing/replotting.
@@ -270,30 +331,46 @@ def write_run_metadata(
     The metadata is stored as JSON in:
         <run_name>/run_metadata.json
     """
-    outdir = Path(cfg.run_name)
+    outdir = Path(cfg.run.run_name)
     outdir.mkdir(parents=True, exist_ok=True)
     path = outdir / "run_metadata.json"
 
     payload = {
-        "run_name": cfg.run_name,
+        "run_name": cfg.run.run_name,
         "Nt": int(Nt),
         "Nx": int(Nx),
-        "T_total": float(cfg.T_total),
-        "L": float(cfg.L),
-        "A": float(cfg.A),
-        "save_every": int(cfg.save_every),
+        "T_total": float(cfg.run.T_total),
+        "L": float(cfg.geometry.L),
+        "A": float(cfg.geometry.A),
+        "save_every": int(cfg.output.save_every),
         "dt": float(dt),
         "dx": float(dx),
-        "waveform_type": str(cfg.waveform_type),
-        "V_peak": float(cfg.V_peak),
-        "tV_start": float(cfg.tV_start),
-        "tV_end": float(cfg.tV_end),
-        "tau": float(cfg.tau),
-        "t_peak": float(cfg.t_peak),
-        "f_rf": float(cfg.f_rf),
-        "V_dc": float(cfg.V_dc),
-        "phi_rf": float(cfg.phi_rf),
+        "hotloop_backend": str(cfg.numerics.hotloop_backend),
+        "numba_parallel": bool(cfg.numerics.numba_parallel),
+        "use_adaptive_substepping": bool(cfg.numerics.use_adaptive_substepping),
+        "target_cfl_substep": float(cfg.numerics.target_cfl_substep),
+        "max_substeps": int(cfg.numerics.max_substeps),
+        "adaptive_substep_overflow_policy": str(cfg.numerics.adaptive_substep_overflow_policy),
+        "adaptive_substep_warn_every": int(cfg.numerics.adaptive_substep_warn_every),
+        "bc_poisson_picard_min_iter": int(cfg.numerics.bc_poisson_picard_min_iter),
+        "bc_poisson_picard_max_iter": int(cfg.numerics.bc_poisson_picard_max_iter),
+        "bc_poisson_picard_tol": float(cfg.numerics.bc_poisson_picard_tol),
+        "waveform_type": str(cfg.waveform.waveform_type),
+        "V_peak": float(cfg.waveform.V_peak),
+        "tV_start": float(cfg.waveform.tV_start),
+        "tV_end": float(cfg.waveform.tV_end),
+        "tau": float(cfg.waveform.tau),
+        "t_peak": float(cfg.waveform.t_peak),
+        "f_rf": float(cfg.waveform.f_rf),
+        "V_dc": float(cfg.waveform.V_dc),
+        "phi_rf": float(cfg.waveform.phi_rf),
     }
+    if adaptive_stats:
+        payload["adaptive_stats"] = adaptive_stats
+    if hotloop_stats:
+        payload["hotloop_stats"] = hotloop_stats
+    if bc_poisson_picard_stats:
+        payload["bc_poisson_picard_stats"] = bc_poisson_picard_stats
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -322,12 +399,18 @@ def write_snapshot(
     Gamma_e_sampled: np.ndarray | None = None,
     townsend_alpha_sampled: np.ndarray | None = None,
     nu_i_sampled: np.ndarray | None = None,
+    S_ion_sampled: np.ndarray | None = None,
     S_sampled: np.ndarray | None = None,
+    mu_e_sampled: np.ndarray | None = None,
+    D_e_sampled: np.ndarray | None = None,
     Gamma_i: np.ndarray | None = None,
     Gamma_e: np.ndarray | None = None,
     townsend_alpha: np.ndarray | None = None,
     nu: np.ndarray | None = None,
+    S_ion: np.ndarray | None = None,
     S: np.ndarray | None = None,
+    mu_e: np.ndarray | None = None,
+    D_e: np.ndarray | None = None,
 ) -> None:
     """
     Store the current plasma state (and optionally diagnostic fields)
@@ -352,13 +435,17 @@ def write_snapshot(
         potential, and electric field to be written.
     log_intermediate : bool, optional
         If True, also write diagnostic quantities (fluxes, townsend_alpha,
-        nu_i, S) to the corresponding *_sampled arrays. Default is False.
-    Gamma_i_sampled, Gamma_e_sampled, townsend_alpha_sampled, nu_i_sampled, S_sampled : np.ndarray or None
+        nu_i, S_ion, S) to the corresponding *_sampled arrays. Default is False.
+    Gamma_i_sampled, Gamma_e_sampled, townsend_alpha_sampled, nu_i_sampled, S_ion_sampled, S_sampled : np.ndarray or None
         (Nsave, Nx) diagnostic snapshot arrays (required if
         log_intermediate=True).
-    Gamma_i, Gamma_e, townsend_alpha, nu, S : np.ndarray or None
+    mu_e_sampled, D_e_sampled : np.ndarray or None
+        Optional (Nsave, Nx) sampled transport diagnostic arrays.
+    Gamma_i, Gamma_e, townsend_alpha, nu, S_ion, S : np.ndarray or None
         Current 1D diagnostic profiles (shape (Nx,)) to be stored when
         log_intermediate=True.
+    mu_e, D_e : np.ndarray or None
+        Optional current 1D transport profiles (shape (Nx,)).
 
     Raises
     ------
@@ -394,7 +481,14 @@ def write_snapshot(
         Gamma_e_sampled[k, :] = Gamma_e
         townsend_alpha_sampled[k, :] = townsend_alpha
         nu_i_sampled[k, :]    = nu
+        if S_ion_sampled is not None and S_ion is not None:
+            S_ion_sampled[k, :] = S_ion
 
         # Common plasma source.
         if S_sampled is not None and S is not None:
             S_sampled[k, :] = S
+
+        if mu_e_sampled is not None and mu_e is not None:
+            mu_e_sampled[k, :] = mu_e
+        if D_e_sampled is not None and D_e is not None:
+            D_e_sampled[k, :] = D_e

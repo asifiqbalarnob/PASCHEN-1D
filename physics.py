@@ -3,12 +3,13 @@ physics.py
 
 Physics-facing helper routines for PASCHEN-1D.
 
-This module contains five kinds of logic:
+This module contains six kinds of logic:
 1) Applied-voltage waveform builders.
 2) User-edit hooks for transport and ionization coefficients.
 3) Swarm-data parsing and interpolation helpers for table-driven models.
-4) Reference gas-state construction (neutral density, baseline scalars, beta).
-5) Initial-state construction for phi, E, n_e, and n_i.
+4) Run-scoped swarm-table cache construction for high-performance interpolation.
+5) Reference gas-state construction (neutral density, baseline scalars, beta).
+6) Initial-state construction for phi, E, n_e, and n_i.
 
 Conventions:
 - SI units are used unless noted otherwise.
@@ -18,24 +19,275 @@ Conventions:
   ``compute_user_defined_*`` and ``build_*_profile`` functions below.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 
 from physical_constants import kB, e, m_e
-from config import SimulationConfig, TransportCoeffs
+from config import (
+    SimulationConfig,
+    TransportCoeffs,
+    TransportSourceMode,
+)
 
 
 _MU_N_TABLE_CACHE: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 _D_N_TABLE_CACHE: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 _ALPHA_OVER_N_TABLE_CACHE: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+_NU_OVER_N_TABLE_CACHE: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 _ELECTRON_TRANSPORT_FALLBACK_WARNED: set[str] = set()
-_ION_TRANSPORT_FALLBACK_WARNED: set[str] = set()
 _ELECTRON_DIFFUSION_FALLBACK_WARNED: set[str] = set()
-_ION_DIFFUSION_FALLBACK_WARNED: set[str] = set()
 _TOWNSEND_ALPHA_FALLBACK_WARNED: set[str] = set()
 _SWARM_DATA_SECTION_CACHE: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]] = {}
+_SWARM_DATA_ENERGY_SECTION_CACHE: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]] = {}
+_SWARM_DATA_AXIS_CACHE: dict[str, tuple[bool, bool]] = {}
+
+
+@dataclass
+class _EoverNInterpolator:
+    """
+    Precomputed log-log interpolator for E/N-axis swarm quantities.
+
+    This object holds interpolation-ready arrays so runtime calls avoid repeated
+    path resolution, file parsing, and log-transform setup.
+    """
+    en_td_min: float
+    en_td_max: float
+    log_en_td: np.ndarray
+    log_values: np.ndarray
+    density_operation: str
+
+    def evaluate(self, E_column: np.ndarray, neutral_density: float) -> np.ndarray:
+        """
+        Evaluate the interpolated runtime quantity on the local electric field.
+        """
+        N_g = max(float(neutral_density), 1.0)
+        en_td_local = np.abs(E_column).astype(np.float64, copy=False) * 1.0e21 / N_g
+        en_td_local = np.clip(en_td_local, self.en_td_min, self.en_td_max)
+        log_en_td_local = np.log10(en_td_local)
+        log_values_local = np.interp(log_en_td_local, self.log_en_td, self.log_values)
+        values_local = np.power(10.0, log_values_local)
+
+        if self.density_operation == "divide_by_density":
+            runtime_values = values_local / N_g
+        elif self.density_operation == "multiply_by_density":
+            runtime_values = values_local * N_g
+        else:
+            raise ValueError(f"Unknown density_operation: {self.density_operation}")
+
+        return runtime_values.astype(np.float32, copy=False)
+
+
+@dataclass
+class _EnergyInterpolator:
+    """
+    Preloaded linear interpolator for energy-axis swarm quantities.
+    """
+    eps_grid_eV: np.ndarray
+    values_grid: np.ndarray
+    quantity_name: str
+
+    def evaluate(self, eps_query_eV: np.ndarray, policy: str) -> np.ndarray:
+        """
+        Evaluate with configured out-of-range policy ("clip" or "error").
+        """
+        eps_min = float(self.eps_grid_eV[0])
+        eps_max = float(self.eps_grid_eV[-1])
+        eps_safe = _apply_energy_range_policy(
+            eps_query_eV.astype(np.float64, copy=False),
+            eps_min,
+            eps_max,
+            policy,
+            quantity_name=self.quantity_name,
+        )
+        return np.interp(eps_safe, self.eps_grid_eV, self.values_grid)
+
+
+@dataclass
+class SwarmRuntimeInterpolationCache:
+    """
+    Run-scoped cache of swarm-data interpolation objects.
+
+    The cache preloads all needed swarm sections once at simulation startup and
+    exposes lightweight evaluators used inside the time-stepping loop.
+    """
+    electron_transport_source: TransportSourceMode = "user_defined_equation"
+    townsend_alpha_source_mode: str = "user_defined_equation"
+    ionization_frequency_source_mode: str = "interpolate_from_e_over_n_table"
+    impact_ionization_model: str = "from_townsend_alpha"
+    electron_mu_eovern_interp: Optional[_EoverNInterpolator] = None
+    electron_D_eovern_interp: Optional[_EoverNInterpolator] = None
+    alpha_eovern_interp: Optional[_EoverNInterpolator] = None
+    nu_over_N_eovern_interp: Optional[_EoverNInterpolator] = None
+    alpha_energy_interp: Optional[_EnergyInterpolator] = None
+    electron_mu_energy_interp: Optional[_EnergyInterpolator] = None
+    electron_D_energy_interp: Optional[_EnergyInterpolator] = None
+    nu_over_N_energy_interp: Optional[_EnergyInterpolator] = None
+    nu_m_over_N_energy_interp: Optional[_EnergyInterpolator] = None
+    loss_over_N_energy_interp: Optional[_EnergyInterpolator] = None
+
+    def electron_mobility_from_field(
+        self,
+        cfg: SimulationConfig,
+        x_array: np.ndarray,
+        E_column: np.ndarray,
+        neutral_density: float,
+    ) -> np.ndarray:
+        """
+        Evaluate mu_e(x) from either cached swarm interpolation or user hook.
+        """
+        if (
+            self.electron_transport_source == "swarm_data_table_interpolation"
+            and self.electron_mu_eovern_interp is not None
+        ):
+            return self.electron_mu_eovern_interp.evaluate(E_column, neutral_density)
+        return compute_user_defined_electron_mobility(cfg, x_array, E_column)
+
+    def electron_diffusion_from_field(
+        self,
+        cfg: SimulationConfig,
+        x_array: np.ndarray,
+        E_column: np.ndarray,
+        neutral_density: float,
+    ) -> np.ndarray:
+        """
+        Evaluate D_e(x) from either cached swarm interpolation or user hook.
+        """
+        if (
+            self.electron_transport_source == "swarm_data_table_interpolation"
+            and self.electron_D_eovern_interp is not None
+        ):
+            return self.electron_D_eovern_interp.evaluate(E_column, neutral_density)
+        return compute_user_defined_electron_diffusion(cfg, x_array, E_column)
+
+    def townsend_alpha_from_field(
+        self,
+        E_column: np.ndarray,
+        p_Torr: float,
+        pr: float,
+        gas: str,
+        neutral_density: float,
+    ) -> np.ndarray:
+        """
+        Evaluate alpha(x) from cached swarm interpolation or user hook.
+        """
+        if (
+            self.townsend_alpha_source_mode == "interpolate_from_e_over_n_table"
+            and self.alpha_eovern_interp is not None
+        ):
+            return self.alpha_eovern_interp.evaluate(E_column, neutral_density)
+        return compute_user_defined_townsend_alpha(E_column, p_Torr, pr, gas).astype(
+            np.float32, copy=False
+        )
+
+    def townsend_alpha_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        neutral_density: float,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate alpha(x) [1/m] from cached energy-axis alpha/N interpolation.
+        """
+        if self.alpha_energy_interp is None:
+            raise RuntimeError("Energy-axis Townsend-alpha interpolator is not initialized.")
+        alpha_over_N_local = self.alpha_energy_interp.evaluate(
+            mean_energy_eV, out_of_range_policy
+        )
+        N_g = max(float(neutral_density), 1.0)
+        return (alpha_over_N_local * N_g).astype(np.float32, copy=False)
+
+    def ionization_frequency_from_field(
+        self,
+        E_column: np.ndarray,
+        neutral_density: float,
+    ) -> np.ndarray:
+        """
+        Evaluate nu_i(x) [s^-1] from cached E/N-axis nu_i/N interpolation.
+        """
+        if self.nu_over_N_eovern_interp is None:
+            raise RuntimeError("E/N-axis ionization-frequency interpolator is not initialized.")
+        return self.nu_over_N_eovern_interp.evaluate(E_column, neutral_density)
+
+    def electron_mobility_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        neutral_density: float,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate mu_e(x) from cached energy-axis interpolation.
+        """
+        if self.electron_mu_energy_interp is None:
+            raise RuntimeError("LEA electron mobility interpolator is not initialized.")
+        muN_local = self.electron_mu_energy_interp.evaluate(mean_energy_eV, out_of_range_policy)
+        N_g = max(float(neutral_density), 1.0)
+        return (muN_local / N_g).astype(np.float32, copy=False)
+
+    def electron_diffusion_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        neutral_density: float,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate D_e(x) from cached energy-axis interpolation.
+        """
+        if self.electron_D_energy_interp is None:
+            raise RuntimeError("LEA electron diffusion interpolator is not initialized.")
+        DN_local = self.electron_D_energy_interp.evaluate(mean_energy_eV, out_of_range_policy)
+        N_g = max(float(neutral_density), 1.0)
+        return (DN_local / N_g).astype(np.float32, copy=False)
+
+    def ionization_frequency_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        neutral_density: float,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate nu_i(x) [s^-1] from cached energy-axis interpolation.
+        """
+        if self.nu_over_N_energy_interp is None:
+            raise RuntimeError("LEA ionization-frequency interpolator is not initialized.")
+        nu_over_N_local = self.nu_over_N_energy_interp.evaluate(
+            mean_energy_eV, out_of_range_policy
+        )
+        N_g = max(float(neutral_density), 1.0)
+        return (nu_over_N_local * N_g).astype(np.float32, copy=False)
+
+    def momentum_frequency_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        neutral_density: float,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate nu_m(x) [s^-1] from cached energy-axis interpolation.
+        """
+        if self.nu_m_over_N_energy_interp is None:
+            raise RuntimeError("LEA momentum-frequency interpolator is not initialized.")
+        nu_m_over_N_local = self.nu_m_over_N_energy_interp.evaluate(
+            mean_energy_eV, out_of_range_policy
+        )
+        N_g = max(float(neutral_density), 1.0)
+        return (nu_m_over_N_local * N_g).astype(np.float32, copy=False)
+
+    def energy_loss_rate_over_N_from_energy(
+        self,
+        mean_energy_eV: np.ndarray,
+        out_of_range_policy: str,
+    ) -> np.ndarray:
+        """
+        Evaluate (P_loss/N)(x) [eV m^3/s] from cached energy-axis interpolation.
+        """
+        if self.loss_over_N_energy_interp is None:
+            raise RuntimeError("LEA energy-loss interpolator is not initialized.")
+        return self.loss_over_N_energy_interp.evaluate(
+            mean_energy_eV, out_of_range_policy
+        ).astype(np.float32, copy=False)
 
 
 # ============================================================
@@ -44,7 +296,7 @@ _SWARM_DATA_SECTION_CACHE: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]] 
 
 def make_voltage_waveform(cfg: SimulationConfig) -> Callable[[np.ndarray], np.ndarray]:
     """
-    Build the applied-voltage function V_app(t) from cfg.waveform_type.
+    Build the applied-voltage function V_app(t) from cfg.waveform.waveform_type.
 
     Parameters
     ----------
@@ -61,7 +313,7 @@ def make_voltage_waveform(cfg: SimulationConfig) -> Callable[[np.ndarray], np.nd
 
     Notes
     -----
-    Supported waveform types (cfg.waveform_type):
+    Supported waveform types (cfg.waveform.waveform_type):
 
     - "gaussian":
         V(t) = V_peak * exp(-((t - t_peak) / tau)^2)
@@ -78,17 +330,17 @@ def make_voltage_waveform(cfg: SimulationConfig) -> Callable[[np.ndarray], np.nd
     - "rf":
         V(t) = V_dc + V_peak * sin(2π f_rf t + phi_rf)
     """
-    if cfg.waveform_type == "gaussian":
+    if cfg.waveform.waveform_type == "gaussian":
         def V_app_func(t: np.ndarray) -> np.ndarray:
             t = np.asarray(t)
-            return cfg.V_peak * np.exp(-((t - cfg.t_peak) / cfg.tau) ** 2)
+            return cfg.waveform.V_peak * np.exp(-((t - cfg.waveform.t_peak) / cfg.waveform.tau) ** 2)
 
-    elif cfg.waveform_type == "dc":
+    elif cfg.waveform.waveform_type == "dc":
         def V_app_func(t: np.ndarray) -> np.ndarray:
             t = np.asarray(t)
-            return cfg.V_peak * np.ones_like(t)
+            return cfg.waveform.V_peak * np.ones_like(t)
 
-    elif cfg.waveform_type == "step":
+    elif cfg.waveform.waveform_type == "step":
         # Small nonzero floor to avoid exactly zero applied voltage
         # (can help prevent degeneracies in some models).
         min_V = 1e-15
@@ -96,23 +348,23 @@ def make_voltage_waveform(cfg: SimulationConfig) -> Callable[[np.ndarray], np.nd
         def V_app_func(t: np.ndarray) -> np.ndarray:
             t = np.asarray(t)
             return (
-                cfg.V_peak * ((t >= cfg.tV_start) & (t <= cfg.tV_end)) +
-                min_V      * ((t < cfg.tV_start) | (t > cfg.tV_end))
+                cfg.waveform.V_peak * ((t >= cfg.waveform.tV_start) & (t <= cfg.waveform.tV_end)) +
+                min_V      * ((t < cfg.waveform.tV_start) | (t > cfg.waveform.tV_end))
             )
 
     # --- pure RF (optionally with DC bias) ---
-    elif cfg.waveform_type == "rf":
-        omega_rf = 2.0 * np.pi * cfg.f_rf
-        V0       = cfg.V_dc
-        Vrf      = cfg.V_peak
-        phi_rf   = cfg.phi_rf
+    elif cfg.waveform.waveform_type == "rf":
+        omega_rf = 2.0 * np.pi * cfg.waveform.f_rf
+        V0       = cfg.waveform.V_dc
+        Vrf      = cfg.waveform.V_peak
+        phi_rf   = cfg.waveform.phi_rf
 
         def V_app_func(t: np.ndarray) -> np.ndarray:
             t = np.asarray(t)
             return V0 + Vrf * np.sin(omega_rf * t + phi_rf)
 
     else:
-        raise ValueError(f"Unknown waveform_type: {cfg.waveform_type}")
+        raise ValueError(f"Unknown waveform_type: {cfg.waveform.waveform_type}")
 
     return V_app_func
 
@@ -148,8 +400,8 @@ def compute_background_neutral_density(cfg: SimulationConfig) -> np.float32:
     density is computed from the ideal-gas relation N_g = p / (k_B T_gas),
     with pressure converted from Torr to Pa.
     """
-    p_Pa = float(cfg.p_Torr) * 133.32236842105263
-    T_gas = max(float(cfg.T_i), 1.0)
+    p_Pa = float(cfg.plasma_state.p_Torr) * 133.32236842105263
+    T_gas = max(float(cfg.plasma_state.T_i), 1.0)
     return np.float32(p_Pa / (kB * T_gas))
 
 
@@ -169,7 +421,7 @@ def _warn_fallback_once(
     source_selector: str,
     reason: str,
     *,
-    fallback_target: str = "user_defined_equations",
+    fallback_target: str = "user_defined_equation",
     detail: str = "fell back to",
 ) -> None:
     """
@@ -183,6 +435,113 @@ def _warn_fallback_once(
         f"{source_selector}='swarm_data_table_interpolation' "
         f"{detail} {fallback_target} because {reason}."
     )
+
+
+def _normalize_electron_kinetics_mode(cfg: SimulationConfig) -> str:
+    """
+    Return the normalized electron-kinetics mode string.
+    """
+    mode = str(cfg.plasma.electron_kinetics_model).strip().lower()
+    if mode not in {
+        "user_defined_electron_kinetics",
+        "local_field_approximation",
+    }:
+        raise ValueError(f"Unknown electron_kinetics_model: {cfg.plasma.electron_kinetics_model}")
+    return mode
+
+
+def _resolve_electron_transport_source(cfg: SimulationConfig) -> TransportSourceMode:
+    """
+    Resolve electron transport-source selection for the active kinetics mode.
+    """
+    mode = _normalize_electron_kinetics_mode(cfg)
+    if mode == "user_defined_electron_kinetics":
+        return "user_defined_equation"
+    if mode == "local_field_approximation":
+        return cfg.local_field_approximation.electron_transport_source
+    raise ValueError(f"Unsupported electron kinetics mode: {mode}")
+
+
+def _resolve_ion_transport_source(cfg: SimulationConfig) -> TransportSourceMode:
+    """
+    Resolve ion transport-source selection for the active kinetics mode.
+    """
+    ion_mode = str(cfg.plasma.ion_kinetics_model).strip().lower()
+    if ion_mode == "user_defined_ion_kinetics":
+        return "user_defined_equation"
+    raise ValueError(f"Unsupported ion kinetics model: {cfg.plasma.ion_kinetics_model}")
+
+
+def _resolve_electron_swarm_path(cfg: SimulationConfig) -> str:
+    """
+    Resolve the active electron swarm-data file path for the current mode.
+    """
+    return cfg.local_field_approximation.electron_swarm_data_path
+
+
+def _resolve_townsend_alpha_source_mode(cfg: SimulationConfig) -> str:
+    """
+    Resolve Townsend-alpha source mode for the alpha-based ionization branch.
+    """
+    mode = str(cfg.townsend_coefficient.townsend_alpha_source_mode).strip().lower()
+    if mode not in {
+        "user_defined_equation",
+        "interpolate_from_e_over_n_table",
+    }:
+        raise ValueError(
+            "Unknown townsend_alpha_source_mode: "
+            f"{cfg.townsend_coefficient.townsend_alpha_source_mode}"
+        )
+    return mode
+
+
+def _resolve_townsend_alpha_path(cfg: SimulationConfig) -> str:
+    """
+    Resolve Townsend-alpha swarm-data path for interpolation modes.
+    """
+    if cfg.townsend_coefficient.townsend_alpha_swarm_data_path is not None:
+        return cfg.townsend_coefficient.townsend_alpha_swarm_data_path
+
+    return cfg.local_field_approximation.electron_swarm_data_path
+
+
+def _resolve_impact_ionization_model(cfg: SimulationConfig) -> str:
+    """
+    Normalize top-level impact-ionization branch selector.
+    """
+    model = str(cfg.plasma.impact_ionization_model).strip().lower()
+    if model not in {
+        "from_townsend_alpha",
+        "from_ionization_frequency",
+    }:
+        raise ValueError(f"Unknown impact_ionization_model: {cfg.plasma.impact_ionization_model}")
+    return model
+
+
+def _resolve_ionization_frequency_source_mode(cfg: SimulationConfig) -> str:
+    """
+    Resolve direct ionization-frequency source mode.
+    """
+    mode = str(cfg.ionization_frequency_source.ionization_frequency_source_mode).strip().lower()
+    if mode not in {
+        "user_defined_equation",
+        "interpolate_from_e_over_n_table",
+    }:
+        raise ValueError(
+            "Unknown ionization_frequency_source_mode: "
+            f"{cfg.ionization_frequency_source.ionization_frequency_source_mode}"
+        )
+    return mode
+
+
+def _resolve_ionization_frequency_path(cfg: SimulationConfig) -> str:
+    """
+    Resolve swarm-data path for direct nu_i interpolation mode.
+    """
+    if cfg.ionization_frequency_source.ionization_frequency_swarm_data_path is not None:
+        return cfg.ionization_frequency_source.ionization_frequency_swarm_data_path
+
+    return cfg.local_field_approximation.electron_swarm_data_path
 
 
 def load_swarm_data_section(
@@ -212,13 +571,13 @@ def load_swarm_data_section(
         return cached
 
     lines = Path(resolved).read_text(errors="replace").splitlines()
-    target_header = f"E/N (Td)\t{section_label}"
     in_block = False
     pairs: list[tuple[float, float]] = []
 
     for line in lines:
         if not in_block:
-            if line.strip() == target_header:
+            stripped_header = line.strip()
+            if stripped_header.startswith("E/N (Td)") and (section_label in stripped_header):
                 in_block = True
             continue
 
@@ -255,6 +614,123 @@ def load_swarm_data_section(
     return en_td, values
 
 
+def load_swarm_energy_section(
+    path_str: str,
+    section_label: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load one named energy-axis section from a supported raw swarm-data output file.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, values)`` in float64, sorted in ascending energy.
+    """
+    resolved = str(_resolve_project_path(path_str))
+    cache_key = (resolved, section_label)
+    cached = _SWARM_DATA_ENERGY_SECTION_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    lines = Path(resolved).read_text(errors="replace").splitlines()
+    in_block = False
+    pairs: list[tuple[float, float]] = []
+
+    for line in lines:
+        if not in_block:
+            stripped_header = line.strip()
+            if stripped_header.startswith("Energy (eV)") and (section_label in stripped_header):
+                in_block = True
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("Energy (eV)"):
+            break
+
+        parts = stripped.split()
+        if len(parts) < 2:
+            continue
+
+        try:
+            eps_val = float(parts[0])
+            y_val = float(parts[1])
+        except ValueError:
+            continue
+        pairs.append((eps_val, y_val))
+
+    if len(pairs) < 2:
+        raise ValueError(
+            f"Could not find a usable swarm-data energy section '{section_label}' in "
+            f"'{resolved}'."
+        )
+
+    raw = np.asarray(pairs, dtype=np.float64)
+    energy_eV = raw[:, 0]
+    values = raw[:, 1]
+    order = np.argsort(energy_eV)
+    energy_eV = energy_eV[order]
+    values = values[order]
+    _SWARM_DATA_ENERGY_SECTION_CACHE[cache_key] = (energy_eV, values)
+    return energy_eV, values
+
+
+def _detect_swarm_data_axes(path_str: str) -> tuple[bool, bool]:
+    """
+    Detect whether a swarm-data file contains E/N-axis and/or Energy-axis headers.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        (has_eoverN_axis, has_energy_axis)
+    """
+    resolved = str(_resolve_project_path(path_str))
+    cached = _SWARM_DATA_AXIS_CACHE.get(resolved)
+    if cached is not None:
+        return cached
+
+    text = Path(resolved).read_text(errors="replace")
+    has_eoverN = "E/N (Td)\t" in text
+    has_energy = "Energy (eV)\t" in text
+    out = (has_eoverN, has_energy)
+    _SWARM_DATA_AXIS_CACHE[resolved] = out
+    return out
+
+
+def _ensure_swarm_axis_compatibility(
+    path_str: str,
+    *,
+    expected_axis: str,
+    source_label: str,
+) -> None:
+    """
+    Validate that a swarm-data file contains the expected axis family.
+    """
+    has_eoverN, has_energy = _detect_swarm_data_axes(path_str)
+    resolved = str(_resolve_project_path(path_str))
+
+    if expected_axis == "eovern":
+        if has_energy and (not has_eoverN):
+            raise ValueError(
+                f"{source_label} '{resolved}' appears to be energy-axis only "
+                "(contains 'Energy (eV)' headers but no 'E/N (Td)' headers). "
+                "Use an E/N-axis file for user_defined_electron_kinetics/local_field_approximation mode."
+            )
+        return
+
+    if expected_axis == "energy":
+        if has_eoverN and (not has_energy):
+            raise ValueError(
+                f"{source_label} '{resolved}' appears to be E/N-axis only "
+                "(contains 'E/N (Td)' headers but no 'Energy (eV)' headers). "
+                "Use an energy-axis file for mean-energy interpolation utilities."
+            )
+        return
+
+    raise ValueError(f"Unknown expected_axis: {expected_axis}")
+
+
 def _load_swarm_quantity_data(
     path_str: str,
     *,
@@ -272,6 +748,12 @@ def _load_swarm_quantity_data(
     cached = cache.get(resolved)
     if cached is not None:
         return cached
+
+    _ensure_swarm_axis_compatibility(
+        resolved,
+        expected_axis="eovern",
+        source_label=source_label,
+    )
 
     try:
         en_td, values = load_swarm_data_section(resolved, section_label)
@@ -344,6 +826,159 @@ def _interpolate_swarm_quantity_from_table(
         raise ValueError(f"Unknown density_operation: {density_operation}")
 
     return runtime_values.astype(np.float32, copy=False)
+
+
+def _build_eovern_interpolator(
+    en_td_table: np.ndarray,
+    values_table: np.ndarray,
+    *,
+    density_operation: str,
+    allow_zero_values: bool = False,
+) -> _EoverNInterpolator:
+    """
+    Build a reusable log-log E/N interpolator object from tabulated arrays.
+    """
+    safe_values = (
+        np.maximum(values_table, 1.0e-300) if allow_zero_values else values_table
+    )
+    return _EoverNInterpolator(
+        en_td_min=float(en_td_table[0]),
+        en_td_max=float(en_td_table[-1]),
+        log_en_td=np.log10(en_td_table),
+        log_values=np.log10(safe_values),
+        density_operation=density_operation,
+    )
+
+
+def _build_total_loss_over_N_energy_interpolator(
+    eps_el: np.ndarray,
+    pel_over_N: np.ndarray,
+    eps_inel: np.ndarray,
+    pinel_over_N: np.ndarray,
+) -> _EnergyInterpolator:
+    """
+    Build a reusable energy-loss interpolator for (P_el + P_inel)/N.
+
+    The combined curve is built on the union of available mean-energy grids.
+    Inelastic losses are treated as zero below their tabulated onset energy so
+    low-energy LEA states are not artificially excluded.
+    """
+    eps_grid = np.unique(np.concatenate((eps_el, eps_inel))).astype(np.float64, copy=False)
+
+    # Elastic term: use tabulated trend across the full covered range.
+    pel_grid = np.interp(eps_grid, eps_el, pel_over_N)
+
+    # Inelastic term: physically zero below first inelastic threshold/onset.
+    pinel_grid = np.interp(
+        eps_grid,
+        eps_inel,
+        pinel_over_N,
+        left=0.0,
+        right=float(pinel_over_N[-1]),
+    )
+    ptotal_grid = pel_grid + pinel_grid
+
+    return _EnergyInterpolator(
+        eps_grid_eV=eps_grid,
+        values_grid=ptotal_grid,
+        quantity_name="P_loss/N(energy)",
+    )
+
+
+def build_swarm_interpolation_cache(cfg: SimulationConfig) -> SwarmRuntimeInterpolationCache:
+    """
+    Preload and validate swarm-data tables once for the active run configuration.
+
+    Returns
+    -------
+    SwarmRuntimeInterpolationCache
+        Cache object with ready-to-use interpolation evaluators for:
+        - E/N-axis mobility, diffusion, Townsend alpha (as configured),
+        - optional direct E/N-axis ionization-frequency interpolation.
+
+    Notes
+    -----
+    This routine centralizes all expensive swarm-data warmup work outside the
+    runtime loop so transport/source evaluation inside `run_simulation` only
+    performs light interpolation calls.
+    """
+    cache = SwarmRuntimeInterpolationCache()
+
+    kinetics_mode = _normalize_electron_kinetics_mode(cfg)
+    cache.electron_transport_source = _resolve_electron_transport_source(cfg)
+    cache.townsend_alpha_source_mode = _resolve_townsend_alpha_source_mode(cfg)
+    cache.ionization_frequency_source_mode = _resolve_ionization_frequency_source_mode(cfg)
+    cache.impact_ionization_model = _resolve_impact_ionization_model(cfg)
+
+    # Field-based electron transport (LFA mode).
+    if cache.electron_transport_source == "swarm_data_table_interpolation":
+        source_path = _resolve_electron_swarm_path(cfg)
+        try:
+            en_mu, muN = load_electron_mobility_muN_data(source_path)
+            en_D, DN = load_electron_diffusion_DN_data(source_path)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            _warn_fallback_once(
+                _ELECTRON_TRANSPORT_FALLBACK_WARNED,
+                "Electron-transport",
+                "electron_transport_source",
+                str(exc),
+            )
+            _warn_fallback_once(
+                _ELECTRON_DIFFUSION_FALLBACK_WARNED,
+                "Electron-diffusion",
+                "electron_transport_source",
+                str(exc),
+                detail="is still using",
+            )
+            cache.electron_transport_source = "user_defined_equation"
+        else:
+            cache.electron_mu_eovern_interp = _build_eovern_interpolator(
+                en_mu,
+                muN,
+                density_operation="divide_by_density",
+            )
+            cache.electron_D_eovern_interp = _build_eovern_interpolator(
+                en_D,
+                DN,
+                density_operation="divide_by_density",
+            )
+
+    # Townsend alpha interpolation (for alpha-based ionization mode).
+    if cache.townsend_alpha_source_mode != "user_defined_equation":
+        alpha_path = _resolve_townsend_alpha_path(cfg)
+        try:
+            if cache.townsend_alpha_source_mode == "interpolate_from_e_over_n_table":
+                en_alpha, alpha_over_N = load_townsend_alpha_over_N_data(alpha_path)
+                cache.alpha_eovern_interp = _build_eovern_interpolator(
+                    en_alpha,
+                    alpha_over_N,
+                    density_operation="multiply_by_density",
+                    allow_zero_values=True,
+                )
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            _warn_fallback_once(
+                _TOWNSEND_ALPHA_FALLBACK_WARNED,
+                "Townsend-alpha",
+                "townsend_alpha_source_mode",
+                str(exc),
+            )
+            cache.townsend_alpha_source_mode = "user_defined_equation"
+
+    # Direct ionization-frequency interpolation (nu_i from table).
+    if (
+        cache.impact_ionization_model == "from_ionization_frequency"
+        and cache.ionization_frequency_source_mode != "user_defined_equation"
+    ):
+        ion_path = _resolve_ionization_frequency_path(cfg)
+        if cache.ionization_frequency_source_mode == "interpolate_from_e_over_n_table":
+            en_nu, nu_over_N = load_total_ionization_frequency_over_N_data(ion_path)
+            cache.nu_over_N_eovern_interp = _build_eovern_interpolator(
+                en_nu,
+                nu_over_N,
+                density_operation="multiply_by_density",
+                allow_zero_values=True,
+            )
+    return cache
 
 
 def load_electron_mobility_muN_data(path_str: str) -> tuple[np.ndarray, np.ndarray]:
@@ -433,6 +1068,46 @@ def load_townsend_alpha_over_N_data(path_str: str) -> tuple[np.ndarray, np.ndarr
     )
 
 
+def load_townsend_alpha_over_N_vs_energy_data(
+    path_str: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load Townsend alpha/N data versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, alpha_over_N)`` in float64.
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="Townsend-alpha source",
+    )
+    return load_swarm_energy_section(path_str, "Townsend ioniz. coef. alpha/N (m2)")
+
+
+def load_total_ionization_frequency_over_N_data(
+    path_str: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load total ionization-frequency data (nu_i/N) versus E/N.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(en_td, nu_over_N)`` in float64, sorted in ascending E/N.
+    """
+    return _load_swarm_quantity_data(
+        path_str,
+        cache=_NU_OVER_N_TABLE_CACHE,
+        section_label="Total ionization freq. /N (m3/s)",
+        source_label="Ionization-frequency source",
+        value_label="nu_i/N",
+        allow_zero_values=True,
+    )
+
+
 def interpolate_electron_mobility_from_muN_table(
     cfg: SimulationConfig,
     E_column: np.ndarray,
@@ -467,7 +1142,7 @@ def interpolate_electron_mobility_from_muN_table(
     decades. Values outside the tabulated E/N range are clamped to the
     nearest table endpoint.
     """
-    source_path = cfg.electron_swarm_data_path
+    source_path = _resolve_electron_swarm_path(cfg)
     en_td_table, muN_table = load_electron_mobility_muN_data(source_path)
 
     return _interpolate_swarm_quantity_from_table(
@@ -496,7 +1171,7 @@ def interpolate_electron_diffusion_from_DN_table(
     Values outside the tabulated E/N range are clamped to the nearest table
     endpoint.
     """
-    source_path = cfg.electron_swarm_data_path
+    source_path = _resolve_electron_swarm_path(cfg)
     en_td_table, DN_table = load_electron_diffusion_DN_data(source_path)
 
     return _interpolate_swarm_quantity_from_table(
@@ -522,9 +1197,7 @@ def interpolate_townsend_alpha_from_alpha_over_N_table(
         alpha     = (alpha/N) * N_g
     """
     source_path = (
-        cfg.townsend_alpha_swarm_data_path
-        if cfg.townsend_alpha_swarm_data_path is not None
-        else cfg.electron_swarm_data_path
+        _resolve_townsend_alpha_path(cfg)
     )
     en_td_table, alpha_over_N_table = load_townsend_alpha_over_N_data(source_path)
 
@@ -538,6 +1211,297 @@ def interpolate_townsend_alpha_from_alpha_over_N_table(
     )
 
 
+def interpolate_townsend_alpha_from_alpha_over_N_energy_table(
+    cfg: SimulationConfig,
+    mean_energy_eV: np.ndarray,
+    neutral_density: float,
+    out_of_range_policy: str = "clip",
+) -> np.ndarray:
+    """
+    Interpolate Townsend alpha(x) from an energy-axis alpha/N table.
+    """
+    source_path = _resolve_townsend_alpha_path(cfg)
+    eps_grid, alpha_over_N = load_townsend_alpha_over_N_vs_energy_data(source_path)
+    alpha_over_N_local = _interp_energy_axis_quantity(
+        mean_energy_eV.astype(np.float64, copy=False),
+        eps_grid,
+        alpha_over_N,
+        out_of_range_policy,
+        quantity_name="alpha/N(energy)",
+    )
+    N_g = max(float(neutral_density), 1.0)
+    return (alpha_over_N_local * N_g).astype(np.float32, copy=False)
+
+
+def load_total_ionization_frequency_over_N_vs_energy_data(
+    path_str: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load total ionization-frequency data (nu_i/N) versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, nu_over_N)`` in float64.
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA ionization source",
+    )
+    return load_swarm_energy_section(path_str, "Total ionization freq. /N (m3/s)")
+
+
+def load_momentum_frequency_over_N_vs_energy_data(
+    path_str: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load electron momentum-transfer frequency data (nu_m/N) versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, nu_m_over_N)`` in float64.
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA momentum-frequency source",
+    )
+    return load_swarm_energy_section(path_str, "Momentum frequency /N (m3/s)")
+
+
+def load_mobility_times_N_vs_energy_data(path_str: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load electron mobility*neutral-density data versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, muN)`` in float64.
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA electron transport source",
+    )
+    return load_swarm_energy_section(path_str, "Mobility *N (1/m/V/s)")
+
+
+def load_diffusion_times_N_vs_energy_data(path_str: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load electron diffusion*neutral-density data versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, DN)`` in float64.
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA electron transport source",
+    )
+    return load_swarm_energy_section(path_str, "Diffusion coefficient *N (1/m/s)")
+
+
+def load_elastic_power_loss_over_N_vs_energy_data(path_str: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load elastic electron-energy loss power over N versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, P_elastic_over_N)`` in float64, where values are in
+        [eV m^3 / s].
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA energy-loss source",
+    )
+    return load_swarm_energy_section(path_str, "Elastic power loss /N (eV m3/s)")
+
+
+def load_inelastic_power_loss_over_N_vs_energy_data(path_str: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Load inelastic electron-energy loss power over N versus mean energy.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Arrays ``(energy_eV, P_inelastic_over_N)`` in float64, where values are in
+        [eV m^3 / s].
+    """
+    _ensure_swarm_axis_compatibility(
+        path_str,
+        expected_axis="energy",
+        source_label="LEA energy-loss source",
+    )
+    return load_swarm_energy_section(path_str, "Inelastic power loss /N (eV m3/s)")
+
+
+def _apply_energy_range_policy(
+    eps_local_eV: np.ndarray,
+    eps_min: float,
+    eps_max: float,
+    policy: str,
+    *,
+    quantity_name: str,
+) -> np.ndarray:
+    """
+    Apply out-of-range policy for local mean-energy interpolation requests.
+    """
+    if policy == "clip":
+        return np.clip(eps_local_eV, eps_min, eps_max)
+
+    if policy == "error":
+        below = np.any(eps_local_eV < eps_min)
+        above = np.any(eps_local_eV > eps_max)
+        if below or above:
+            e_min_local = float(np.min(eps_local_eV))
+            e_max_local = float(np.max(eps_local_eV))
+            raise ValueError(
+                f"Local mean energy for {quantity_name} is out of swarm-table range: "
+                f"local=[{e_min_local:.6g}, {e_max_local:.6g}] eV, "
+                f"table=[{eps_min:.6g}, {eps_max:.6g}] eV."
+            )
+        return eps_local_eV
+
+    raise ValueError(
+        f"Unknown local_energy_out_of_swarm_table_range_policy: {policy}"
+    )
+
+
+def _interp_energy_axis_quantity(
+    eps_query_eV: np.ndarray,
+    eps_grid_eV: np.ndarray,
+    values_grid: np.ndarray,
+    policy: str,
+    *,
+    quantity_name: str,
+) -> np.ndarray:
+    """
+    Interpolate an energy-axis swarm-data quantity with configurable
+    out-of-range behavior.
+    """
+    eps_min = float(eps_grid_eV[0])
+    eps_max = float(eps_grid_eV[-1])
+    eps_safe = _apply_energy_range_policy(
+        eps_query_eV.astype(np.float64, copy=False),
+        eps_min,
+        eps_max,
+        policy,
+        quantity_name=quantity_name,
+    )
+    return np.interp(eps_safe, eps_grid_eV, values_grid)
+
+
+def interpolate_electron_mobility_from_energy_swarm(
+    cfg: SimulationConfig,
+    mean_energy_eV: np.ndarray,
+    neutral_density: float,
+    out_of_range_policy: str,
+) -> np.ndarray:
+    """
+    Interpolate electron mobility from an energy-axis swarm-data file.
+    """
+    source_path = _resolve_electron_swarm_path(cfg)
+    eps_grid, muN_grid = load_mobility_times_N_vs_energy_data(source_path)
+    muN_local = _interp_energy_axis_quantity(
+        mean_energy_eV.astype(np.float64, copy=False),
+        eps_grid,
+        muN_grid,
+        out_of_range_policy,
+        quantity_name="mu_e(energy)",
+    )
+    N_g = max(float(neutral_density), 1.0)
+    mu_local = muN_local / N_g
+    return mu_local.astype(np.float32, copy=False)
+
+
+def interpolate_electron_diffusion_from_energy_swarm(
+    cfg: SimulationConfig,
+    mean_energy_eV: np.ndarray,
+    neutral_density: float,
+    out_of_range_policy: str,
+) -> np.ndarray:
+    """
+    Interpolate electron diffusion coefficient from an energy-axis swarm-data file.
+    """
+    source_path = _resolve_electron_swarm_path(cfg)
+    eps_grid, DN_grid = load_diffusion_times_N_vs_energy_data(source_path)
+    DN_local = _interp_energy_axis_quantity(
+        mean_energy_eV.astype(np.float64, copy=False),
+        eps_grid,
+        DN_grid,
+        out_of_range_policy,
+        quantity_name="D_e(energy)",
+    )
+    N_g = max(float(neutral_density), 1.0)
+    D_local = DN_local / N_g
+    return D_local.astype(np.float32, copy=False)
+
+
+def build_energy_loss_rate_over_N_profile_from_energy_swarm(
+    cfg: SimulationConfig,
+    mean_energy_eV: np.ndarray,
+    out_of_range_policy: str,
+) -> np.ndarray:
+    """
+    Build total electron energy-loss-rate coefficient profile from an
+    energy-axis swarm-data file.
+
+    Returns
+    -------
+    np.ndarray
+        ``(P_loss / N)(x)`` in [eV m^3 / s], with
+        ``P_loss = ne * N * (P_loss / N)``.
+    """
+    source_path = _resolve_electron_swarm_path(cfg)
+    eps_el, pel_over_N = load_elastic_power_loss_over_N_vs_energy_data(source_path)
+    eps_inel, pinel_over_N = load_inelastic_power_loss_over_N_vs_energy_data(source_path)
+
+    total_loss_interp = _build_total_loss_over_N_energy_interpolator(
+        eps_el,
+        pel_over_N,
+        eps_inel,
+        pinel_over_N,
+    )
+    ptotal_local = total_loss_interp.evaluate(
+        mean_energy_eV.astype(np.float64, copy=False),
+        out_of_range_policy,
+    )
+    return ptotal_local.astype(np.float32, copy=False)
+
+
+def build_ionization_frequency_profile_from_energy_swarm(
+    cfg: SimulationConfig,
+    mean_energy_eV: np.ndarray,
+    neutral_density: float,
+    out_of_range_policy: str = "clip",
+) -> np.ndarray:
+    """
+    Build nu_i(x) [s^-1] from an energy-axis swarm-data file.
+
+    The interpolation uses local mean electron energy [eV] directly:
+      1) interpolate ``nu_i/N`` on the energy axis,
+      2) multiply by neutral density ``N`` to get ``nu_i`` [s^-1].
+    """
+    source_path = _resolve_ionization_frequency_path(cfg)
+    eps_grid, nu_over_N = load_total_ionization_frequency_over_N_vs_energy_data(source_path)
+    nu_over_N_local = _interp_energy_axis_quantity(
+        mean_energy_eV.astype(np.float64, copy=False),
+        eps_grid,
+        nu_over_N,
+        out_of_range_policy,
+        quantity_name="nu_i/N(energy)",
+    )
+    N_g = max(float(neutral_density), 1.0)
+    nu_local = nu_over_N_local * N_g
+    return nu_local.astype(np.float32, copy=False)
+
+
 # ============================================================
 # User-defined transport model hooks
 # ============================================================
@@ -547,14 +1511,14 @@ def compute_user_defined_electron_mobility_scalar(cfg: SimulationConfig) -> np.f
     Return the default scalar electron mobility used by the user-defined
     electron-mobility profile.
     """
-    p_Torr = cfg.p_Torr
-    gas = cfg.gas.lower()
+    p_Torr = cfg.plasma_state.p_Torr
+    gas = cfg.plasma_state.gas.lower()
     if gas == "argon":
         mu_e_val = 29.3 / p_Torr
     elif gas == "nitrogen":
         mu_e_val = 30.4 / p_Torr
     else:
-        raise NotImplementedError(f"Electron mobility not implemented for gas '{cfg.gas}'")
+        raise NotImplementedError(f"Electron mobility not implemented for gas '{cfg.plasma_state.gas}'")
     return np.float32(mu_e_val)
 
 
@@ -563,14 +1527,14 @@ def compute_user_defined_ion_mobility_scalar(cfg: SimulationConfig) -> np.float3
     Return the default scalar ion mobility used by the user-defined ion-mobility
     profile.
     """
-    p_Torr = cfg.p_Torr
-    gas = cfg.gas.lower()
+    p_Torr = cfg.plasma_state.p_Torr
+    gas = cfg.plasma_state.gas.lower()
     if gas == "argon":
         mu_i_val = 1.5e-1 / p_Torr
     elif gas == "nitrogen":
         mu_i_val = 2.09e-1 / p_Torr
     else:
-        raise NotImplementedError(f"Ion mobility not implemented for gas '{cfg.gas}'")
+        raise NotImplementedError(f"Ion mobility not implemented for gas '{cfg.plasma_state.gas}'")
     return np.float32(mu_i_val)
 
 
@@ -579,15 +1543,15 @@ def compute_user_defined_electron_diffusion_scalar(cfg: SimulationConfig) -> np.
     Return the default scalar electron diffusion coefficient used by the
     user-defined electron-diffusion profile.
     """
-    p_Torr = cfg.p_Torr
-    gas = cfg.gas.lower()
+    p_Torr = cfg.plasma_state.p_Torr
+    gas = cfg.plasma_state.gas.lower()
     if gas == "argon":
         D_e_val = 29.3 / p_Torr
     elif gas == "nitrogen":
         mu_e_val = float(compute_user_defined_electron_mobility_scalar(cfg))
-        D_e_val = mu_e_val * kB * cfg.T_e / e
+        D_e_val = mu_e_val * kB * cfg.plasma_state.T_e / e
     else:
-        raise NotImplementedError(f"Electron diffusion not implemented for gas '{cfg.gas}'")
+        raise NotImplementedError(f"Electron diffusion not implemented for gas '{cfg.plasma_state.gas}'")
     return np.float32(D_e_val)
 
 
@@ -596,15 +1560,15 @@ def compute_user_defined_ion_diffusion_scalar(cfg: SimulationConfig) -> np.float
     Return the default scalar ion diffusion coefficient used by the
     user-defined ion-diffusion profile.
     """
-    p_Torr = cfg.p_Torr
-    gas = cfg.gas.lower()
+    p_Torr = cfg.plasma_state.p_Torr
+    gas = cfg.plasma_state.gas.lower()
     if gas == "argon":
         D_i_val = 0.006 / p_Torr
     elif gas == "nitrogen":
         mu_i_val = float(compute_user_defined_ion_mobility_scalar(cfg))
-        D_i_val = mu_i_val * kB * cfg.T_i / e
+        D_i_val = mu_i_val * kB * cfg.plasma_state.T_i / e
     else:
-        raise NotImplementedError(f"Ion diffusion not implemented for gas '{cfg.gas}'")
+        raise NotImplementedError(f"Ion diffusion not implemented for gas '{cfg.plasma_state.gas}'")
     return np.float32(D_i_val)
 
 
@@ -766,16 +1730,49 @@ def compute_user_defined_townsend_alpha(
 
     return alpha_column
 
+
+def compute_user_defined_ionization_frequency(
+    cfg: SimulationConfig,
+    x_array: np.ndarray,
+    E_column: np.ndarray,
+) -> np.ndarray:
+    """
+    Return user-defined impact-ionization frequency nu_i(x) [s^-1].
+
+    Default closure is intentionally conservative and backward compatible:
+    1) compute user-defined Townsend alpha(E) [1/m],
+    2) compute user-defined electron drift speed magnitude |u_e| = |mu_e E| [m/s],
+    3) set nu_i = alpha * |u_e| [s^-1].
+
+    Users can replace this function with any direct nu_i model without
+    changing runtime branching in ``paschen_1d.py``.
+    """
+    p_Torr = float(cfg.plasma_state.p_Torr)
+    # Retain legacy reduced-pressure argument path for alpha hook.
+    pr = p_Torr * 300.0 / max(float(cfg.plasma_state.T_i), 1.0)
+    gas = cfg.plasma_state.gas
+    alpha_local = compute_user_defined_townsend_alpha(
+        E_column=E_column,
+        p_Torr=p_Torr,
+        pr=pr,
+        gas=gas,
+    ).astype(np.float32, copy=False)
+    mu_e_local = compute_user_defined_electron_mobility(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_column,
+    ).astype(np.float32, copy=False)
+    u_e_local = mu_e_local * E_column
+    return (alpha_local * np.abs(u_e_local)).astype(np.float32, copy=False)
+
 def compute_user_defined_recombination_coefficient(cfg: SimulationConfig) -> np.float32:
     """
     Return the user-defined volumetric recombination coefficient beta.
 
     This is the intended edit point for the default volume recombination /
-    loss coefficient used in the continuity source term. The current model
-    keeps a single gas-independent constant value.
+    loss coefficient used in the continuity source term.
     """
-    del cfg
-    return np.float32(2.0e-13)
+    return np.float32(cfg.recombination.recombination_coefficient)
 
 
 # ============================================================
@@ -821,18 +1818,18 @@ def build_transport_reference_state(cfg: SimulationConfig) -> TransportCoeffs:
     * The neutral background is treated as a fixed uniform reservoir, evaluated
       from the ideal-gas closure T_gas = T_i.
     """
-    p_Torr = cfg.p_Torr
-    T_i    = cfg.T_i
+    p_Torr = cfg.plasma_state.p_Torr
+    T_i    = cfg.plasma_state.T_i
     neutral_density = compute_background_neutral_density(cfg)
 
     # Reduced pressure (Surzhikov-style scaling), typical form:
     #   pr = p * (T_ref / T_i)
     # with T_ref ≈ 300 K
     pr      = p_Torr * 300.0 / T_i
-    T_e_eV  = 1.0
-    T_i_eV  = 0.0258
+    T_e_eV  = float(kB * float(cfg.plasma_state.T_e) / e)
+    T_i_eV  = float(kB * float(cfg.plasma_state.T_i) / e)
 
-    gas = cfg.gas.lower()
+    gas = cfg.plasma_state.gas.lower()
 
     if gas in ("argon", "nitrogen"):
         mu_e_val = compute_user_defined_electron_mobility_scalar(cfg)
@@ -841,7 +1838,7 @@ def build_transport_reference_state(cfg: SimulationConfig) -> TransportCoeffs:
         D_i_val = compute_user_defined_ion_diffusion_scalar(cfg)
         beta_val = compute_user_defined_recombination_coefficient(cfg)
     else:
-        raise NotImplementedError(f"Gas '{cfg.gas}' not implemented yet.")
+        raise NotImplementedError(f"Gas '{cfg.plasma_state.gas}' not implemented yet.")
 
     return TransportCoeffs(
         mu_e=np.float32(mu_e_val),
@@ -867,8 +1864,8 @@ def build_electron_mobility_profile(
     Parameters
     ----------
     cfg : SimulationConfig
-        Simulation configuration. The active selector is
-        ``cfg.electron_transport_source``.
+        Simulation configuration. The active selector is resolved from
+        electron kinetics mode and the corresponding kinetics dataclass.
     x_array : np.ndarray
         Spatial grid [m], shape (Nx,).
     E_column : np.ndarray
@@ -883,17 +1880,17 @@ def build_electron_mobility_profile(
 
     Notes
     -----
-    The ``"user_defined_equations"`` source uses the transport formulas
+    The ``"user_defined_equation"`` source uses the transport formulas
     implemented in this module (the current default returns the legacy
     empirical constant profile). The
     ``"swarm_data_table_interpolation"`` source attempts to use a swarm-data
-    table for mu_e(E/N). If the source is incompatible with the selected gas,
-    unavailable, or cannot be loaded, the code falls back to
-    ``"user_defined_equations"`` and prints a one-time warning.
+    table for mu_e(E/N). If the source is unavailable or cannot be loaded,
+    the code falls back to
+    ``"user_defined_equation"`` and prints a one-time warning.
     """
-    source = cfg.electron_transport_source
+    source = _resolve_electron_transport_source(cfg)
 
-    if source == "user_defined_equations":
+    if source == "user_defined_equation":
         return compute_user_defined_electron_mobility(
             cfg=cfg,
             x_array=x_array,
@@ -901,22 +1898,6 @@ def build_electron_mobility_profile(
         )
 
     if source == "swarm_data_table_interpolation":
-        table_gas = str(
-            cfg.electron_swarm_data_gas
-        ).strip().lower()
-        if cfg.gas.strip().lower() != table_gas:
-            _warn_fallback_once(
-                _ELECTRON_TRANSPORT_FALLBACK_WARNED,
-                "Electron-transport",
-                "electron_transport_source",
-                "the configured electron swarm-data gas does not match cfg.gas",
-            )
-            return compute_user_defined_electron_mobility(
-                cfg=cfg,
-                x_array=x_array,
-                E_column=E_column,
-            )
-
         try:
             return interpolate_electron_mobility_from_muN_table(
                 cfg=cfg,
@@ -947,35 +1928,15 @@ def build_ion_mobility_profile(
     """
     Build the ion-mobility profile mu_i(x) for the current step.
 
-    The ``"user_defined_equations"`` source uses the transport formulas
-    implemented in this module. The
-    ``"swarm_data_table_interpolation"`` source is reserved for a future
-    ion swarm-data backend; until then it falls back to the user-defined
-    equations and prints a one-time warning.
+    Ion kinetics is currently user-defined only. This routine applies
+    ``compute_user_defined_ion_mobility``.
     """
-    source = cfg.ion_transport_source
-
-    if source == "user_defined_equations":
-        return compute_user_defined_ion_mobility(
-            cfg=cfg,
-            x_array=x_array,
-            E_column=E_column,
-        )
-
-    if source == "swarm_data_table_interpolation":
-        _warn_fallback_once(
-            _ION_TRANSPORT_FALLBACK_WARNED,
-            "Ion-transport",
-            "ion_transport_source",
-            "no ion swarm-data interpolation backend is implemented yet",
-        )
-        return compute_user_defined_ion_mobility(
-            cfg=cfg,
-            x_array=x_array,
-            E_column=E_column,
-        )
-
-    raise ValueError(f"Unknown ion_transport_source: {source}")
+    _resolve_ion_transport_source(cfg)
+    return compute_user_defined_ion_mobility(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_column,
+    )
 
 
 def build_electron_diffusion_profile(
@@ -987,17 +1948,17 @@ def build_electron_diffusion_profile(
     """
     Build the electron-diffusion profile D_e(x) for the current step.
 
-    The ``"user_defined_equations"`` source uses the diffusion formulas
+    The ``"user_defined_equation"`` source uses the diffusion formulas
     implemented in this module. The
     ``"swarm_data_table_interpolation"`` source uses the same electron
     swarm-data file as the mobility interpolation path to recover D_e(E/N).
-    If the source is incompatible with the selected gas, unavailable, or
-    cannot be loaded, the code falls back to ``"user_defined_equations"``
+    If the source is unavailable or cannot be loaded, the code falls back to
+    ``"user_defined_equation"``
     and prints a one-time warning.
     """
-    source = cfg.electron_transport_source
+    source = _resolve_electron_transport_source(cfg)
 
-    if source == "user_defined_equations":
+    if source == "user_defined_equation":
         return compute_user_defined_electron_diffusion(
             cfg=cfg,
             x_array=x_array,
@@ -1005,21 +1966,6 @@ def build_electron_diffusion_profile(
         )
 
     if source == "swarm_data_table_interpolation":
-        table_gas = str(cfg.electron_swarm_data_gas).strip().lower()
-        if cfg.gas.strip().lower() != table_gas:
-            _warn_fallback_once(
-                _ELECTRON_DIFFUSION_FALLBACK_WARNED,
-                "Electron-diffusion",
-                "electron_transport_source",
-                "the configured electron swarm-data gas does not match cfg.gas",
-                detail="is still using",
-            )
-            return compute_user_defined_electron_diffusion(
-                cfg=cfg,
-                x_array=x_array,
-                E_column=E_column,
-            )
-
         try:
             return interpolate_electron_diffusion_from_DN_table(
                 cfg=cfg,
@@ -1051,36 +1997,15 @@ def build_ion_diffusion_profile(
     """
     Build the ion-diffusion profile D_i(x) for the current step.
 
-    The ``"user_defined_equations"`` source uses the diffusion formulas
-    implemented in this module. The
-    ``"swarm_data_table_interpolation"`` source is reserved for a future ion
-    swarm-data diffusion backend; until then it falls back to the
-    user-defined equations and prints a one-time warning.
+    Ion kinetics is currently user-defined only. This routine applies
+    ``compute_user_defined_ion_diffusion``.
     """
-    source = cfg.ion_transport_source
-
-    if source == "user_defined_equations":
-        return compute_user_defined_ion_diffusion(
-            cfg=cfg,
-            x_array=x_array,
-            E_column=E_column,
-        )
-
-    if source == "swarm_data_table_interpolation":
-        _warn_fallback_once(
-            _ION_DIFFUSION_FALLBACK_WARNED,
-            "Ion-diffusion",
-            "ion_transport_source",
-            "no ion swarm-data diffusion backend is implemented yet",
-            detail="is still using",
-        )
-        return compute_user_defined_ion_diffusion(
-            cfg=cfg,
-            x_array=x_array,
-            E_column=E_column,
-        )
-
-    raise ValueError(f"Unknown ion_transport_source: {source}")
+    _resolve_ion_transport_source(cfg)
+    return compute_user_defined_ion_diffusion(
+        cfg=cfg,
+        x_array=x_array,
+        E_column=E_column,
+    )
     
 
 # ============================================================
@@ -1094,42 +2019,24 @@ def build_townsend_alpha_profile(
     pr: float,
     gas: str,
     neutral_density: float,
+    mean_energy_eV: np.ndarray | None = None,
+    out_of_range_policy: str = "clip",
 ) -> np.ndarray:
     """
     Build the Townsend ionization-coefficient profile alpha(x) [1/m].
 
-    The ``"user_defined_equations"`` source uses the alpha(E, p) equations
-    implemented in this module. The
-    ``"swarm_data_table_interpolation"`` source interpolates alpha/N from the
-    electron swarm-data file and converts it to alpha(x). If the source is
-    incompatible with the selected gas, unavailable, or cannot be loaded, the
-    code falls back to ``"user_defined_equations"`` and prints a one-time
-    warning.
+    Source modes:
+    - user_defined_equation
+    - interpolate_from_e_over_n_table
     """
-    source = cfg.townsend_alpha_source
+    source_mode = _resolve_townsend_alpha_source_mode(cfg)
 
-    if source == "user_defined_equations":
+    if source_mode == "user_defined_equation":
         return compute_user_defined_townsend_alpha(E_column, p_Torr, pr, gas).astype(
             np.float32, copy=False
         )
 
-    if source == "swarm_data_table_interpolation":
-        table_gas = str(
-            cfg.townsend_alpha_swarm_data_gas
-            if cfg.townsend_alpha_swarm_data_gas is not None
-            else cfg.electron_swarm_data_gas
-        ).strip().lower()
-        if gas.strip().lower() != table_gas:
-            _warn_fallback_once(
-                _TOWNSEND_ALPHA_FALLBACK_WARNED,
-                "Townsend-alpha",
-                "townsend_alpha_source",
-                "the configured Townsend-alpha swarm-data gas does not match cfg.gas",
-            )
-            return compute_user_defined_townsend_alpha(E_column, p_Torr, pr, gas).astype(
-                np.float32, copy=False
-            )
-
+    if source_mode == "interpolate_from_e_over_n_table":
         try:
             return interpolate_townsend_alpha_from_alpha_over_N_table(
                 cfg=cfg,
@@ -1140,14 +2047,14 @@ def build_townsend_alpha_profile(
             _warn_fallback_once(
                 _TOWNSEND_ALPHA_FALLBACK_WARNED,
                 "Townsend-alpha",
-                "townsend_alpha_source",
+                "townsend_alpha_source_mode",
                 str(exc),
             )
             return compute_user_defined_townsend_alpha(E_column, p_Torr, pr, gas).astype(
                 np.float32, copy=False
             )
 
-    raise ValueError(f"Unknown townsend_alpha_source: {source}")
+    raise ValueError(f"Unknown townsend_alpha_source_mode: {source_mode}")
 
 
 # ============================================================
@@ -1196,7 +2103,7 @@ def build_initial_conditions(
     convention). It is intentionally left inactive.
     """
     Nx    = x_array.size
-    n0    = cfg.n0
+    n0    = cfg.plasma_state.n0
 
     # Initial gap voltage = applied voltage at t = 0
     V0 = float(V_app_func(0.0))

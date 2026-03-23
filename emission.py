@@ -1000,7 +1000,9 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
     For each electrode ("anode", "cathode"), all enabled emission components
     are summed. If no component is enabled on an electrode, that side emits zero.
     """
-    if not getattr(cfg, "enable_external_emission", False):
+    emission_cfg = cfg.emission
+
+    if not emission_cfg.enable_external_emission:
         return None
 
     def _resolve_electrode_param(
@@ -1016,15 +1018,15 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
           2) shared_<base_name>
           3) default
         """
-        mode = getattr(cfg, "electrode_material_mode", "shared")
+        mode = emission_cfg.electrode_material_mode
         if mode == "separate":
             key_sep = f"{electrode}_{base_name}"
-            if hasattr(cfg, key_sep):
-                return getattr(cfg, key_sep)
+            if hasattr(emission_cfg, key_sep):
+                return getattr(emission_cfg, key_sep)
 
         key_shared = f"shared_{base_name}"
-        if hasattr(cfg, key_shared):
-            return getattr(cfg, key_shared)
+        if hasattr(emission_cfg, key_shared):
+            return getattr(emission_cfg, key_shared)
 
         return default
 
@@ -1034,11 +1036,11 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
         emitters: list[Callable[[float, float, float, float | None], float]] = []
         prefix = "anode" if electrode == "anode" else "cathode"
 
-        if not getattr(cfg, f"enable_{prefix}_external_emission", False):
+        if not getattr(emission_cfg, f"enable_{prefix}_external_emission", False):
             return emitters
 
         # 1) Constant-J component.
-        if getattr(cfg, f"{prefix}_enable_constant_J_emission", False):
+        if getattr(emission_cfg, f"{prefix}_enable_constant_J_emission", False):
             J_const = float(
                 _resolve_electrode_param(
                     electrode,
@@ -1066,7 +1068,7 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
             )
 
         # 2) FN component.
-        if getattr(cfg, f"{prefix}_enable_fn_emission", False):
+        if getattr(emission_cfg, f"{prefix}_enable_fn_emission", False):
             work_function_eV = float(
                 _resolve_electrode_param(
                     electrode,
@@ -1096,7 +1098,7 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
             emitters.append(emitter_fn)
 
         # 3) MG component.
-        if getattr(cfg, f"{prefix}_enable_mg_emission", False):
+        if getattr(emission_cfg, f"{prefix}_enable_mg_emission", False):
             work_function_eV = float(
                 _resolve_electrode_param(
                     electrode,
@@ -1145,7 +1147,7 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
             emitters.append(emitter_mg)
 
         # 4) RD component.
-        if getattr(cfg, f"{prefix}_enable_rd_emission", False):
+        if getattr(emission_cfg, f"{prefix}_enable_rd_emission", False):
             A_R = float(
                 _resolve_electrode_param(
                     electrode,
@@ -1183,7 +1185,7 @@ def build_emission_model(cfg: SimulationConfig) -> Optional[EmissionModel]:
             emitters.append(emitter_rd)
 
         # 5) Quantum-pulse component.
-        if getattr(cfg, f"{prefix}_enable_quantum_pulse_emission", False):
+        if getattr(emission_cfg, f"{prefix}_enable_quantum_pulse_emission", False):
             half_window_ps = float(
                 _resolve_electrode_param(
                     electrode,

@@ -291,7 +291,8 @@ def plot_selected_temporal_quantity(
     Plot one temporal diagnostic quantity over a selected time window.
 
     Supported `quantity` values are configured from `config.py`:
-    V_app, V_gap, I_discharge, cfl.
+    V_app, V_gap, I_discharge, cfl, picard_iterations,
+    adaptive_substeps, adaptive_dt_sub, adaptive_cfl_est.
     """
     if t_start is None:
         t_start = float(time[0])
@@ -321,6 +322,18 @@ def plot_selected_temporal_quantity(
     elif quantity == "cfl":
         ylabel = "CFL number"
         title = "CFL vs time"
+    elif quantity == "picard_iterations":
+        ylabel = "Picard iterations per macro step"
+        title = "Picard iterations vs time"
+    elif quantity == "adaptive_substeps":
+        ylabel = "Substeps per macro step"
+        title = "Adaptive substeps vs time"
+    elif quantity == "adaptive_dt_sub":
+        ylabel = "Substep dt [s]"
+        title = "Adaptive substep dt vs time"
+    elif quantity == "adaptive_cfl_est":
+        ylabel = "Estimated macro CFL"
+        title = "Estimated macro CFL vs time"
 
     fig, ax = plt.subplots(figsize=(3.6, 2.8))
     ax.plot(x_ns, y)
@@ -371,6 +384,10 @@ def plot_selected_temporal_group(
         "V_gap": "V_gap",
         "I_discharge": "I_discharge",
         "cfl": "cfl",
+        "picard_iterations": "picard_iterations",
+        "adaptive_substeps": "adaptive_substeps",
+        "adaptive_dt_sub": "adaptive_dt_sub",
+        "adaptive_cfl_est": "adaptive_cfl_est",
     }
 
     for q in quantities:
@@ -383,6 +400,14 @@ def plot_selected_temporal_group(
         elif q == "I_discharge":
             y = y * 1e3
             this_unit = "Current [mA]"
+        elif q == "adaptive_substeps":
+            this_unit = "Substeps per macro step"
+        elif q == "adaptive_dt_sub":
+            this_unit = "Substep dt [s]"
+        elif q == "adaptive_cfl_est":
+            this_unit = "Estimated macro CFL"
+        elif q == "picard_iterations":
+            this_unit = "Picard iterations per macro step"
         else:
             this_unit = "CFL number"
 
@@ -507,7 +532,10 @@ def plot_selected_spatial_quantity(
         "Gamma_e": "Gamma_e [m$^{-2}$ s$^{-1}$]",
         "townsend_alpha": "Townsend alpha [m$^{-1}$]",
         "nu_i": "nu_i [s$^{-1}$]",
+        "S_ion": "S_ion [m$^{-3}$ s$^{-1}$]",
         "S": "S [m$^{-3}$ s$^{-1}$]",
+        "mu_e": "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]",
+        "D_e": "D_e [m$^2$ s$^{-1}$]",
     }
 
     fig, ax = plt.subplots(figsize=(4.2, 3.0))
@@ -561,7 +589,10 @@ def plot_selected_spatial_group(
         "Gamma_e": "Gamma [m$^{-2}$ s$^{-1}$]",
         "townsend_alpha": "Townsend alpha [m$^{-1}$]",
         "nu_i": "nu_i [s$^{-1}$]",
+        "S_ion": "S_ion [m$^{-3}$ s$^{-1}$]",
         "S": "S [m$^{-3}$ s$^{-1}$]",
+        "mu_e": "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]",
+        "D_e": "D_e [m$^2$ s$^{-1}$]",
     }
 
     fig, ax = plt.subplots(figsize=(4.4, 3.1))
@@ -631,7 +662,10 @@ def plot_averaged_spatial_quantity(
         "Gamma_e": "Gamma_e [m$^{-2}$ s$^{-1}$]",
         "townsend_alpha": "Townsend alpha [m$^{-1}$]",
         "nu_i": "nu_i [s$^{-1}$]",
+        "S_ion": "S_ion [m$^{-3}$ s$^{-1}$]",
         "S": "S [m$^{-3}$ s$^{-1}$]",
+        "mu_e": "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]",
+        "D_e": "D_e [m$^2$ s$^{-1}$]",
     }
 
     fig, ax = plt.subplots(figsize=(4.2, 3.0))
@@ -687,7 +721,10 @@ def plot_averaged_spatial_group(
         "Gamma_e": "Gamma [m$^{-2}$ s$^{-1}$]",
         "townsend_alpha": "Townsend alpha [m$^{-1}$]",
         "nu_i": "nu_i [s$^{-1}$]",
+        "S_ion": "S_ion [m$^{-3}$ s$^{-1}$]",
         "S": "S [m$^{-3}$ s$^{-1}$]",
+        "mu_e": "mu_e [m$^2$ V$^{-1}$ s$^{-1}$]",
+        "D_e": "D_e [m$^2$ s$^{-1}$]",
     }
 
     fig, ax = plt.subplots(figsize=(4.3, 3.1))

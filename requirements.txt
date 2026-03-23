@@ -7,6 +7,7 @@ numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7
 tqdm>=4.65
+numba>=0.59
 
 # Notebook workflow (drivers/postprocessing)
 jupyterlab>=4.0

@@ -8,8 +8,9 @@ Included components:
 2) Minmod slope limiter.
 3) KT central-upwind drift flux + explicit diffusion + source RHS.
 4) RK4 density update wrapper.
-5) Boundary-condition helpers for electron/ion densities.
-6) Drift-based CFL diagnostic.
+5) Reusable linear KT+RK4 workspaces (low-allocation hot path).
+6) Boundary-condition helpers for electron/ion densities.
+7) Drift-based CFL diagnostic.
 
 All routines assume a uniform 1D spatial grid.
 """
@@ -203,6 +204,69 @@ def minmod(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
     return result
 
 
+def minmod_inplace(
+    a: np.ndarray,
+    b: np.ndarray,
+    c: np.ndarray,
+    out: np.ndarray,
+) -> np.ndarray:
+    """
+    In-place three-argument minmod limiter.
+
+    This variant writes directly into ``out`` and avoids allocating an
+    intermediate result array at each call.
+    """
+    out.fill(0.0)
+    pos_mask = (a > 0) & (b > 0) & (c > 0)
+    neg_mask = (a < 0) & (b < 0) & (c < 0)
+    out[pos_mask] = np.minimum(np.minimum(a[pos_mask], b[pos_mask]), c[pos_mask])
+    out[neg_mask] = np.maximum(np.maximum(a[neg_mask], b[neg_mask]), c[neg_mask])
+    return out
+
+
+def create_linear_rk4_workspace(Nx: int, dtype=np.float32) -> dict[str, np.ndarray]:
+    """
+    Allocate reusable arrays for the linear KT+RK4 hot path.
+
+    The returned workspace is intended for repeated calls to
+    ``rk4_step_linear_reuse`` with fixed grid size ``Nx``.
+    """
+    if Nx < 3:
+        raise ValueError("Nx must be >= 3.")
+    n_face = Nx - 2
+    return {
+        "slope": np.zeros(Nx, dtype=dtype),
+        "dn_bwd": np.empty(n_face, dtype=dtype),
+        "dn_central": np.empty(n_face, dtype=dtype),
+        "dn_fwd": np.empty(n_face, dtype=dtype),
+        "limiter_a": np.empty(n_face, dtype=dtype),
+        "limiter_c": np.empty(n_face, dtype=dtype),
+        "limiter_out": np.empty(n_face, dtype=dtype),
+        "nL_p": np.empty(n_face, dtype=dtype),
+        "nR_p": np.empty(n_face, dtype=dtype),
+        "nL_m": np.empty(n_face, dtype=dtype),
+        "nR_m": np.empty(n_face, dtype=dtype),
+        "u_face_p": np.empty(n_face, dtype=dtype),
+        "u_face_m": np.empty(n_face, dtype=dtype),
+        "a_p": np.empty(n_face, dtype=dtype),
+        "a_m": np.empty(n_face, dtype=dtype),
+        "H_p": np.empty(n_face, dtype=dtype),
+        "H_m": np.empty(n_face, dtype=dtype),
+        "grad_p": np.empty(n_face, dtype=dtype),
+        "grad_m": np.empty(n_face, dtype=dtype),
+        "D_p": np.empty(n_face, dtype=dtype),
+        "D_m": np.empty(n_face, dtype=dtype),
+        "Fd_p": np.empty(n_face, dtype=dtype),
+        "Fd_m": np.empty(n_face, dtype=dtype),
+        "k1": np.empty(Nx, dtype=dtype),
+        "k2": np.empty(Nx, dtype=dtype),
+        "k3": np.empty(Nx, dtype=dtype),
+        "k4": np.empty(Nx, dtype=dtype),
+        "n_tmp": np.empty(Nx, dtype=dtype),
+        "accum": np.empty(Nx, dtype=dtype),
+    }
+
+
 # ============================================================
 # Kurganov-Tadmor flux update with diffusion and sources
 # ============================================================
@@ -373,6 +437,265 @@ def rk4_step(
     n_new = n + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
     # Enforce non-negativity after combining RK stages.
+    np.maximum(n_new, 0.0, out=n_new)
+    return n_new
+
+
+def kt_flux_update_linear_reuse(
+    n: np.ndarray,
+    u: np.ndarray,
+    D: float | np.ndarray,
+    S: np.ndarray,
+    dx: float,
+    kt_limiter_theta: float,
+    adv_coeff: float,
+    rhs_out: np.ndarray,
+    ws: dict[str, np.ndarray],
+) -> np.ndarray:
+    """
+    Low-allocation KT RHS for linear fluxes of the form:
+
+        f(n, u) = adv_coeff * n * u
+
+    Parameters mirror ``kt_flux_update`` for the linear case but write the
+    result directly to ``rhs_out`` using reusable workspace arrays.
+    """
+    rhs_out.fill(0.0)
+    slope = ws["slope"]
+    slope.fill(0.0)
+
+    dn_bwd = ws["dn_bwd"]
+    dn_central = ws["dn_central"]
+    dn_fwd = ws["dn_fwd"]
+
+    np.subtract(n[1:-1], n[:-2], out=dn_bwd)
+    dn_bwd /= dx
+    np.subtract(n[2:], n[:-2], out=dn_central)
+    dn_central *= (0.5 / dx)
+    np.subtract(n[2:], n[1:-1], out=dn_fwd)
+    dn_fwd /= dx
+
+    limiter_a = ws["limiter_a"]
+    limiter_c = ws["limiter_c"]
+    np.multiply(dn_bwd, kt_limiter_theta, out=limiter_a)
+    np.multiply(dn_fwd, kt_limiter_theta, out=limiter_c)
+    minmod_inplace(
+        limiter_a,
+        dn_central,
+        limiter_c,
+        ws["limiter_out"],
+    )
+    slope[1:-1] = ws["limiter_out"]
+
+    nL_p = ws["nL_p"]
+    nR_p = ws["nR_p"]
+    nL_m = ws["nL_m"]
+    nR_m = ws["nR_m"]
+
+    np.multiply(slope[1:-1], 0.5 * dx, out=nL_p)
+    nL_p += n[1:-1]
+    np.multiply(slope[2:], 0.5 * dx, out=nR_p)
+    nR_p *= -1.0
+    nR_p += n[2:]
+
+    np.multiply(slope[:-2], 0.5 * dx, out=nL_m)
+    nL_m += n[:-2]
+    np.multiply(slope[1:-1], 0.5 * dx, out=nR_m)
+    nR_m *= -1.0
+    nR_m += n[1:-1]
+
+    u_face_p = ws["u_face_p"]
+    u_face_m = ws["u_face_m"]
+    np.add(u[1:-1], u[2:], out=u_face_p)
+    u_face_p *= 0.5
+    np.add(u[1:-1], u[:-2], out=u_face_m)
+    u_face_m *= 0.5
+
+    a_p = ws["a_p"]
+    a_m = ws["a_m"]
+    np.multiply(u_face_p, adv_coeff, out=a_p)
+    np.abs(a_p, out=a_p)
+    np.multiply(u_face_m, adv_coeff, out=a_m)
+    np.abs(a_m, out=a_m)
+
+    H_p = ws["H_p"]
+    H_m = ws["H_m"]
+    np.add(nL_p, nR_p, out=H_p)
+    np.multiply(H_p, 0.5 * adv_coeff, out=H_p)
+    H_p *= u_face_p
+    np.subtract(nR_p, nL_p, out=ws["grad_p"])
+    ws["grad_p"] *= 0.5
+    ws["grad_p"] *= a_p
+    H_p -= ws["grad_p"]
+
+    np.add(nL_m, nR_m, out=H_m)
+    np.multiply(H_m, 0.5 * adv_coeff, out=H_m)
+    H_m *= u_face_m
+    np.subtract(nR_m, nL_m, out=ws["grad_m"])
+    ws["grad_m"] *= 0.5
+    ws["grad_m"] *= a_m
+    H_m -= ws["grad_m"]
+
+    grad_p = ws["grad_p"]
+    grad_m = ws["grad_m"]
+    np.subtract(nR_p, nL_p, out=grad_p)
+    grad_p /= dx
+    np.subtract(nR_m, nL_m, out=grad_m)
+    grad_m /= dx
+
+    D_p = ws["D_p"]
+    D_m = ws["D_m"]
+    if np.isscalar(D):
+        D_p.fill(float(D))
+        D_m.fill(float(D))
+    else:
+        np.add(D[1:-1], D[2:], out=D_p)
+        D_p *= 0.5
+        np.add(D[:-2], D[1:-1], out=D_m)
+        D_m *= 0.5
+
+    Fd_p = ws["Fd_p"]
+    Fd_m = ws["Fd_m"]
+    np.multiply(D_p, grad_p, out=Fd_p)
+    Fd_p *= -1.0
+    np.multiply(D_m, grad_m, out=Fd_m)
+    Fd_m *= -1.0
+
+    np.subtract(H_p, H_m, out=ws["accum"][1:-1])
+    ws["accum"][1:-1] *= (-1.0 / dx)
+    np.subtract(Fd_p, Fd_m, out=rhs_out[1:-1])
+    rhs_out[1:-1] *= (-1.0 / dx)
+    rhs_out[1:-1] += ws["accum"][1:-1]
+    rhs_out[1:-1] += S[1:-1]
+
+    return rhs_out
+
+
+def rk4_step_linear_reuse(
+    n: np.ndarray,
+    u: np.ndarray,
+    D: float | np.ndarray,
+    S: np.ndarray,
+    dx: float,
+    dt: float,
+    kt_limiter_theta: float,
+    adv_coeff: float,
+    ws: dict[str, np.ndarray],
+    n_out: np.ndarray,
+) -> np.ndarray:
+    """
+    Low-allocation RK4 update for linear fluxes using reusable workspace.
+
+    This is the optimized path for:
+    - ions:      adv_coeff = +1
+    - electrons: adv_coeff = -1
+    - local LEA omega: adv_coeff = -(5/3)
+    """
+    k1 = ws["k1"]
+    k2 = ws["k2"]
+    k3 = ws["k3"]
+    k4 = ws["k4"]
+    n_tmp = ws["n_tmp"]
+    accum = ws["accum"]
+
+    kt_flux_update_linear_reuse(
+        n=n,
+        u=u,
+        D=D,
+        S=S,
+        dx=dx,
+        kt_limiter_theta=kt_limiter_theta,
+        adv_coeff=adv_coeff,
+        rhs_out=k1,
+        ws=ws,
+    )
+
+    np.multiply(k1, 0.5 * dt, out=n_tmp)
+    n_tmp += n
+    kt_flux_update_linear_reuse(
+        n=n_tmp,
+        u=u,
+        D=D,
+        S=S,
+        dx=dx,
+        kt_limiter_theta=kt_limiter_theta,
+        adv_coeff=adv_coeff,
+        rhs_out=k2,
+        ws=ws,
+    )
+
+    np.multiply(k2, 0.5 * dt, out=n_tmp)
+    n_tmp += n
+    kt_flux_update_linear_reuse(
+        n=n_tmp,
+        u=u,
+        D=D,
+        S=S,
+        dx=dx,
+        kt_limiter_theta=kt_limiter_theta,
+        adv_coeff=adv_coeff,
+        rhs_out=k3,
+        ws=ws,
+    )
+
+    np.multiply(k3, dt, out=n_tmp)
+    n_tmp += n
+    kt_flux_update_linear_reuse(
+        n=n_tmp,
+        u=u,
+        D=D,
+        S=S,
+        dx=dx,
+        kt_limiter_theta=kt_limiter_theta,
+        adv_coeff=adv_coeff,
+        rhs_out=k4,
+        ws=ws,
+    )
+
+    # accum = k1 + 2*k2 + 2*k3 + k4
+    np.multiply(k2, 2.0, out=accum)
+    accum += k1
+    accum += k4
+    n_out[:] = n
+    n_out += (dt / 6.0) * accum
+    n_out += (dt / 3.0) * k3
+
+    np.maximum(n_out, 0.0, out=n_out)
+    return n_out
+
+
+def rk4_step_rhs(
+    n: np.ndarray,
+    rhs_func: Callable[[np.ndarray], np.ndarray],
+    dt: float,
+) -> np.ndarray:
+    """
+    Advance state ``n`` by one RK4 step for a user-supplied RHS callback.
+
+    This helper is intended for nonlocal closures where the RHS cannot be
+    expressed through ``kt_flux_update`` with local coefficients alone.
+
+    Parameters
+    ----------
+    n : np.ndarray
+        Current state vector, shape (Nx,).
+    rhs_func : callable
+        Function returning ``dn/dt`` for a supplied state:
+            rhs = rhs_func(n_state)
+    dt : float
+        Time step [s].
+
+    Returns
+    -------
+    np.ndarray
+        Updated state after one RK4 step with non-negativity projection.
+    """
+    k1 = rhs_func(n)
+    k2 = rhs_func(n + 0.5 * dt * k1)
+    k3 = rhs_func(n + 0.5 * dt * k2)
+    k4 = rhs_func(n + dt * k3)
+
+    n_new = n + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
     np.maximum(n_new, 0.0, out=n_new)
     return n_new
 
@@ -583,8 +906,35 @@ def set_boundary_condition_implicit(
 
 
 # ============================================================
-# CFL diagnostic
+# CFL utilities / diagnostics
 # ============================================================
+
+
+def compute_drift_cfl(
+    mu_e: float | np.ndarray,
+    mu_i: float | np.ndarray,
+    E: np.ndarray,
+    dt: float,
+    dx: float,
+) -> float:
+    """
+    Return drift-based CFL number without side effects.
+
+    This is the pure utility counterpart of ``CFL_test`` and is intended for
+    control logic (e.g., adaptive substepping) where printing is undesirable.
+
+    CFL definition:
+
+        CFL = a_max * dt / dx
+
+    with
+
+        a_max = max_x max(|mu_e E|, |mu_i E|).
+    """
+    a_e = np.abs(mu_e * E)
+    a_i = np.abs(mu_i * E)
+    a_max = max(float(np.max(a_e)), float(np.max(a_i)))
+    return float(a_max * dt / dx)
 
 
 def CFL_test(
@@ -640,12 +990,13 @@ def CFL_test(
       would be unstable; however, the KT + RK4 combo may still be
       more tolerant than a simple upwind scheme.
     """
-    # Characteristic speeds at each cell.
-    a_e = np.abs(mu_e * E_next)
-    a_i = np.abs(mu_i * E_next)
-    a_max = max(a_e.max(), a_i.max())
-
-    C = a_max * dt / dx
+    C = compute_drift_cfl(
+        mu_e=mu_e,
+        mu_i=mu_i,
+        E=E_next,
+        dt=dt,
+        dx=dx,
+    )
 
     # Optional diagnostic print (with bounds guard).
     if C > 1.0:
