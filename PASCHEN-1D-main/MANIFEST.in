@@ -1,0 +1,10 @@
+include LICENSE README.md TUTORIAL.md CHANGELOG.md CITATION.cff THIRD_PARTY_NOTICES.md PRODUCTION_REGRESSION.md
+include requirements.txt requirements-runtime.lock requirements-dev.lock environment.yml
+include *.ipynb
+recursive-include electron_swarm_data *
+recursive-include ion_swarm_data *
+recursive-include tests *.py *.json
+recursive-include tools *.py
+prune __pycache__
+prune .ipynb_checkpoints
+global-exclude *.py[cod]

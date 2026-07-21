@@ -223,3 +223,7 @@ postprocess_figures/
 
 # Local manuscript / analysis artifacts
 manuscript_*.txt
+
+# Release artifacts and preserved production-run archive
+PASCHEN-1D-main/dist/
+PASCHEN-1D-production-results-*/

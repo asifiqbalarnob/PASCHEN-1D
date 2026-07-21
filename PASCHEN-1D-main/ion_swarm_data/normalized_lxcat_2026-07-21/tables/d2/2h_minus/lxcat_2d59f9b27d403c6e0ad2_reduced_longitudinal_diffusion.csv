@@ -1,0 +1,23 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_2d59f9b27d403c6e0ad2"
+# quantity: "reduced_longitudinal_diffusion"
+# reduced_quantity: "N_times_D_longitudinal"
+# units: "1/(m s)"
+# ion: "2H^-"
+# neutral: "D2"
+# gas_temperature_K: 300.0
+# database: "Viehland database"
+# process: "Diffusion x gas density (NDz)"
+# parameters: "Tgas = 300 K"
+# group_comment: "Raw diffusion Data from Technical Reports from Georgia Tech, 1970-1974."
+# source_family: "raw transport data from technical reports from georgia tech, 1970-1974."
+# comment: ""
+# updated: "2011-12-13 14:28:37"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_059_95_95/001_diffusion_x_gas_density.txt"
+# source_file_sha256: "264542ec454ae6166b69bb4b384bd70775de512d72943bb1f3868a478a80169c"
+reduced_electric_field_Td,reduced_transport_SI
+7.490000000000e+00,3.062000000000e+21
+9.970000000000e+00,3.389000000000e+21
+1.500000000000e+01,4.688000000000e+21

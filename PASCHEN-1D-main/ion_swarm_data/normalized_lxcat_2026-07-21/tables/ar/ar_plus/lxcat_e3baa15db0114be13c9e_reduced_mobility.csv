@@ -1,0 +1,29 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_e3baa15db0114be13c9e"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "Ar^+"
+# neutral: "Ar"
+# gas_temperature_K: 300.0
+# database: "Phelps database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 300 K"
+# group_comment: ""
+# source_family: ""
+# comment: "The following Ar+ + Ar data are taken from A. V. Phelps, J. Phys. Chem. Ref. Data 20, 557"
+# updated: "2010-09-13 03:42:59"
+# permalink: "www.lxcat.net/Phelps"
+# reference: "http://jilawww.colorado.edu/~avp/"
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_047_2_2/part_0003_001_mobility.txt"
+# source_file_sha256: "9209c342b0272c80aeacaf120414e9321f018e6e1d14aa1065e10cc124c9e89b"
+reduced_electric_field_Td,reduced_transport_SI
+1.000000000000e+03,1.617602582203e+21
+2.000000000000e+03,1.173032949848e+21
+3.000000000000e+03,9.791703295590e+20
+5.000000000000e+03,7.807076341279e+20
+1.000000000000e+04,5.697588689308e+20
+2.000000000000e+04,4.214045894392e+20
+3.000000000000e+04,3.525670688506e+20
+5.000000000000e+04,2.838936851374e+20
+1.000000000000e+05,2.129202638531e+20

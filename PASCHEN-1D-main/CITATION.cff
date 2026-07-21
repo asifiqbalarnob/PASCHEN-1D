@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use PASCHEN-1D, please cite this software."
+title: "PASCHEN-1D: A one-dimensional fluid plasma solver with multi-mechanism surface emission and flexible external circuit coupling"
+version: 1.0.0
+date-released: 2026-07-21
+type: software
+license: CC-BY-NC-4.0
+authors:
+  - family-names: Iqbal
+    given-names: Asif
+  - family-names: Heri
+    given-names: Yves
+  - family-names: Wang
+    given-names: Bingqing
+  - family-names: Jin
+    given-names: Lan
+  - family-names: Faisal
+    given-names: Md Arifuzzaman
+  - family-names: Zhang
+    given-names: Peng

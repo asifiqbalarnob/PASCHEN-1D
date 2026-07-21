@@ -1,0 +1,8 @@
+# Exact environment used for the PASCHEN-1D 1.0.0 release verification.
+numpy==2.4.4
+scipy==1.17.1
+matplotlib==3.10.8
+tqdm==4.65.0
+numba==0.65.1
+requests==2.32.3
+beautifulsoup4==4.12.2

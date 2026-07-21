@@ -1,0 +1,35 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_38cd9197d86a1b8c6c5c"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "C2H3N^+"
+# neutral: "He"
+# gas_temperature_K: 293.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 293 K"
+# group_comment: "Compiled Ko of Viehland & Mason, At. Data. Nucl. Data Tables 60 (1995) 37."
+# source_family: "compiled ko of viehland & mason, at. data. nucl. data tables 60 (1995) 37."
+# comment: ""
+# updated: "2010-05-14 15:04:20"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_127_194_194/001_mobility.txt"
+# source_file_sha256: "393928266a483b47250f8506d8e069c4b7631a4ca5fb011db7d9f5b6e48f379b"
+reduced_electric_field_Td,reduced_transport_SI
+1.000000000000e+01,3.897919333179e+22
+1.200000000000e+01,3.924435791228e+22
+1.500000000000e+01,3.950952249277e+22
+2.000000000000e+01,3.977468707326e+22
+2.500000000000e+01,3.977468707326e+22
+3.000000000000e+01,3.950952249277e+22
+3.500000000000e+01,3.897919333179e+22
+4.000000000000e+01,3.791853500984e+22
+5.000000000000e+01,3.579721836593e+22
+6.000000000000e+01,3.500172462447e+22
+7.000000000000e+01,3.341073714154e+22
+8.000000000000e+01,3.155458507812e+22
+1.000000000000e+02,2.996359759519e+22
+1.200000000000e+02,2.810744553177e+22
+1.400000000000e+02,2.651645804884e+22

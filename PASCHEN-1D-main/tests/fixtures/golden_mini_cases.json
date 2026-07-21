@@ -1,0 +1,50 @@
+{
+  "argon_dc": {
+    "D_e_mean_final": 10.17361068725586,
+    "D_i_mean_final": 0.0020833334419876337,
+    "E_l2_final": 119998.35156406774,
+    "I_discharge_final": 2.0093503301268357e-09,
+    "V_gap_final": 139.99799064966987,
+    "mu_e_mean_final": 10.17361068725586,
+    "mu_i_mean_final": 0.0520833320915699,
+    "ne_sum_final": 800143876030464.0,
+    "ni_sum_final": 800220975726592.0,
+    "phi_l2_final": 249.9465997163834
+  },
+  "argon_photoemission": {
+    "D_e_mean_final": 10.255000114440918,
+    "D_i_mean_final": 0.002099999925121665,
+    "E_l2_final": 198000.0,
+    "I_discharge_final": 0.0,
+    "V_gap_final": 231.0,
+    "mu_e_mean_final": 10.255000114440918,
+    "mu_i_mean_final": 0.05249999836087227,
+    "ne_sum_final": 0.0,
+    "ni_sum_final": 0.0,
+    "phi_l2_final": 412.41749174834956
+  },
+  "deuterium_pulsed": {
+    "D_e_mean_final": 0.20665600895881653,
+    "D_i_mean_final": 0.0002625271736178547,
+    "E_l2_final": 7.048129996671155e-07,
+    "I_discharge_final": -3.065330947183035e-08,
+    "V_gap_final": 2.349376734481045e-09,
+    "mu_e_mean_final": 7.99491024017334,
+    "mu_i_mean_final": 0.01120397076010704,
+    "ne_sum_final": 79999998623744.0,
+    "ni_sum_final": 79999998623744.0,
+    "phi_l2_final": 4.194476430936225e-09
+  },
+  "nitrogen_pulsed": {
+    "D_e_mean_final": 0.5065439343452454,
+    "D_i_mean_final": 9.006438631331548e-05,
+    "E_l2_final": 1.7257135975038865e-06,
+    "I_discharge_final": -7.505373511620492e-08,
+    "V_gap_final": 5.7523785423130584e-09,
+    "mu_e_mean_final": 0.5066666603088379,
+    "mu_i_mean_final": 0.0034833333920687437,
+    "ne_sum_final": 79999998623744.0,
+    "ni_sum_final": 79999998623744.0,
+    "phi_l2_final": 1.0270049926338218e-08
+  }
+}

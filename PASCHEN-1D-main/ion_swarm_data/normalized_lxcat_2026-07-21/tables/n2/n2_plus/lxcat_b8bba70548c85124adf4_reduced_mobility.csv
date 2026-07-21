@@ -1,0 +1,29 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_b8bba70548c85124adf4"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "N2^+"
+# neutral: "N2"
+# gas_temperature_K: 300.0
+# database: "Phelps database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 300 K"
+# group_comment: ""
+# source_family: ""
+# comment: "The following N+, N2+, and N2 in N2 data are taken from A. V. Phelps, J. Phys. Chem. Ref."
+# updated: "2010-09-13 04:16:18"
+# permalink: "www.lxcat.net/Phelps"
+# reference: "http://jilawww.colorado.edu/~avp/"
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_023_4_4/003_mobility.txt"
+# source_file_sha256: "65508a8e6a85018cee363c53d4240da134c0ef04d96d741ebd876543d1965bc5"
+reduced_electric_field_Td,reduced_transport_SI
+5.000000000000e+02,2.733846824835e+21
+1.000000000000e+03,2.089496894248e+21
+2.000000000000e+03,1.572425962296e+21
+3.000000000000e+03,1.349687714686e+21
+5.000000000000e+03,1.087174780002e+21
+1.000000000000e+04,7.822355124407e+20
+2.000000000000e+04,5.727554938549e+20
+5.000000000000e+04,3.765337042935e+20
+1.000000000000e+05,2.810744553177e+20

@@ -1,0 +1,27 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_f6c8a1f2cf868fd09249"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "138Ba^+(2S1/2)"
+# neutral: "Ar"
+# gas_temperature_K: 305.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 305 K"
+# group_comment: ""
+# source_family: ""
+# comment: "Mobility data from M. J. Bastian et al., J. Chem. Phys. 98 (1993) 9496."
+# updated: "2011-12-12 11:11:38"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_046_5637_5637/part_0001_001_mobility.txt"
+# source_file_sha256: "adbcc200fcce181b001b61ada545cdff36447a22c4abb4d7fba183c555743e99"
+reduced_electric_field_Td,reduced_transport_SI
+4.100000000000e+01,4.772962448791e+21
+6.000000000000e+01,5.250258693670e+21
+8.100000000000e+01,5.409357441963e+21
+1.190000000000e+02,6.045752435135e+21
+1.600000000000e+02,6.363949931721e+21
+1.830000000000e+02,6.125301809281e+21
+2.010000000000e+02,6.337433473672e+21

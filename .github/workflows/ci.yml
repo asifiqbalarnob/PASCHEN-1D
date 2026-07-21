@@ -1,0 +1,28 @@
+name: PASCHEN-1D release checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PASCHEN-1D-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: PASCHEN-1D-main/requirements-dev.lock
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.lock
+      - run: python -m compileall -q *.py tools tests
+      - run: python -m pytest -q
+      - run: python tools/build_electron_manifest.py --check
+      - run: python tools/audit_swarm_data.py
+      - run: python tools/build_release_archive.py
+      - run: tar -tzf dist/PASCHEN-1D-1.0.0.tar.gz | grep 'electron_swarm_data/manifest.json'
+      - run: tar -tzf dist/PASCHEN-1D-1.0.0.tar.gz | grep 'ion_swarm_data/normalized_lxcat_2026-07-21/manifest.json'

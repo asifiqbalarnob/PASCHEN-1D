@@ -1,0 +1,27 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_7ee51197ef9c92de2798"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "84Kr(2P1/2)^+"
+# neutral: "Kr"
+# gas_temperature_K: 294.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 294 K"
+# group_comment: "Compiled Ko of Ellis et al., At. Data Nucl. Data Tables 22 (1978) 179."
+# source_family: "compiled ko of ellis et al., at. data nucl. data tables 22 (1978) 179."
+# comment: ""
+# updated: "2011-12-13 14:25:29"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_169_5106_5106/001_mobility.txt"
+# source_file_sha256: "9ab7b73ad5a4d771e3a8110548c4604cbf52f7e68439dcccf97c002a7ebd02a4"
+reduced_electric_field_Td,reduced_transport_SI
+2.500000000000e+01,2.296325267029e+21
+3.000000000000e+01,2.277763746395e+21
+4.000000000000e+01,2.245943996737e+21
+5.000000000000e+01,2.211472601273e+21
+6.000000000000e+01,2.171697914200e+21
+7.000000000000e+01,2.131923227127e+21
+8.000000000000e+01,2.094800185858e+21

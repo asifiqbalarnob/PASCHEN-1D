@@ -1,0 +1,31 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_51a5333503d8c687fc61"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "CHF2^+"
+# neutral: "CHF3"
+# gas_temperature_K: 300.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 300 K"
+# group_comment: "Mobility data from Basurto and Urquijo, J. Appl. Phys. 91 (2002) 36."
+# source_family: "transport data from basurto and urquijo, j. appl. phys. 91 (2002) 36."
+# comment: ""
+# updated: "2010-09-26 00:08:21"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_074_9_9/001_mobility.txt"
+# source_file_sha256: "49f0673b52b4cfa9b55e18502dad442dc7630c8d2d0d012d466a869571140512"
+reduced_electric_field_Td,reduced_transport_SI
+5.000000000000e+01,1.402720630783e+21
+6.000000000000e+01,1.370900881125e+21
+7.000000000000e+01,1.354991006296e+21
+8.000000000000e+01,1.323171256637e+21
+1.000000000000e+02,1.304609736003e+21
+1.200000000000e+02,1.291351506978e+21
+1.500000000000e+02,1.320519610832e+21
+2.000000000000e+02,1.413327214003e+21
+2.500000000000e+02,1.532651275223e+21
+3.000000000000e+02,1.744782939613e+21
+4.000000000000e+02,2.142529810346e+21

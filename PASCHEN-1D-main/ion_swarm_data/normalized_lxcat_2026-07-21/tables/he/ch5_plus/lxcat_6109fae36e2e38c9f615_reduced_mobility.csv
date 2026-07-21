@@ -1,0 +1,23 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_6109fae36e2e38c9f615"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "CH5^+"
+# neutral: "He"
+# gas_temperature_K: 300.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 300 K"
+# group_comment: "Unpublished thesis of N. Peska, 1981, Leopoold-Franzens-Universitat, Innsbruck, Austria."
+# source_family: "unpublished thesis of n. peska, 1981, leopoold-franzens-universitat, innsbruck, austria."
+# comment: "Data from the unpublished thesis of N. Peska, 1981, Leopoold-Franzens-Universitat,"
+# updated: "2015-07-10 20:36:06"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_062_215_215/001_mobility.txt"
+# source_file_sha256: "749d4fb703e3f68b7898e6e8dab2c71979bed8a5bafd6decb31800541f3ab858"
+reduced_electric_field_Td,reduced_transport_SI
+3.688350000000e+01,4.866008700084e+22
+4.098160000000e+01,4.735229528987e+22
+4.507980000000e+01,4.573240486767e+22

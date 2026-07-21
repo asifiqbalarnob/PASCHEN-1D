@@ -1,0 +1,771 @@
+{
+  "format": "paschen-1d-electron-swarm-manifest-v1",
+  "generated_on": "2026-07-20",
+  "solver": "BOLSIG+ 03/2016 (Mac x86_64)",
+  "source_generation_manifest_sha256": "b251989faaa7d74032ee5619d8bf33ade6275e7d3dae6b2b387af56eec50e929",
+  "required_sections": [
+    "Mobility *N (1/m/V/s)",
+    "Diffusion coefficient *N (1/m/s)",
+    "Townsend ioniz. coef. alpha/N (m2)",
+    "Total ionization freq. /N (m3/s)"
+  ],
+  "table_count": 42,
+  "tables": [
+    {
+      "filename": "lxcat_2026-07-20/ar_swarm_output_full_EoverN.dat",
+      "sha256": "605a8e0ff6d87484f8d4abd4af22b5821a6fe3829b623525480f3cf1c5bfa9bb",
+      "gas": "Ar",
+      "canonical_gas": "ar",
+      "header_gas": "Ar",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c2h2_swarm_output_full_EoverN.dat",
+      "sha256": "74727e9d52af5aa7461ac380ce097cd11bdedbce51daa2fe2de31f443e31ef0d",
+      "gas": "C2H2",
+      "canonical_gas": "c2h2",
+      "header_gas": "C2H2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c2h2f4_swarm_output_full_EoverN.dat",
+      "sha256": "043d14c66d16376f3504938c854494d8cde058a0b3576198f388367d6e5ff387",
+      "gas": "C2H2F4",
+      "canonical_gas": "c2h2f4",
+      "header_gas": "C2H2F4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "ETHZ",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c2h4_swarm_output_full_EoverN.dat",
+      "sha256": "875938cd79c0bf0c6fc0c4110aa5599217bdb93e0581732a8a56c91ab10812d0",
+      "gas": "C2H4",
+      "canonical_gas": "c2h4",
+      "header_gas": "C2H4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c2h6_swarm_output_full_EoverN.dat",
+      "sha256": "68eed0ca19a9fd9c95416b58a3e23f71e4079fcbf2c768a4f51bde6e8993f374",
+      "gas": "C2H6",
+      "canonical_gas": "c2h6",
+      "header_gas": "C2H6",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c3h6_swarm_output_full_EoverN.dat",
+      "sha256": "7cdef51170452c7ec7b755e5cbf8e42490b705f07800b94f7b8a651921e4ba54",
+      "gas": "C3H6",
+      "canonical_gas": "c3h6",
+      "header_gas": "C3H6",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Puech",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c3h8_swarm_output_full_EoverN.dat",
+      "sha256": "30a93744beb91d82c8ef7bbcba7c0639b1557b42432398a46cc53174e7c6ecda",
+      "gas": "C3H8",
+      "canonical_gas": "c3h8",
+      "header_gas": "C3H8",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Morgan",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c4f7n_swarm_output_full_EoverN.dat",
+      "sha256": "8aebb68a639050253189ab13fc6fc1c4530c10bbd2c62412afd417eb402f9ce7",
+      "gas": "C4F7N",
+      "canonical_gas": "c4f7n",
+      "header_gas": "C4F7N",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "ETHZ",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/c5f10o_swarm_output_full_EoverN.dat",
+      "sha256": "d6bec667b2cbe2e00e2a5994f1add73e4ce0725456f8ae95df3a2acd6799a0c6",
+      "gas": "C5F10O",
+      "canonical_gas": "c5f10o",
+      "header_gas": "C5F10O",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "XJTUAETLab",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/ccl2f2_swarm_output_full_EoverN.dat",
+      "sha256": "61806972552ca6889c0407c3faf174eff462ae899fd5d41637bce18d2ddddbaa",
+      "gas": "CCl2F2",
+      "canonical_gas": "ccl2f2",
+      "header_gas": "CCl2F2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/ccl4_swarm_output_full_EoverN.dat",
+      "sha256": "0535592e92b4b8a4f19dd699540d7043110686f31642af321e5730ab4dd7124f",
+      "gas": "CCl4",
+      "canonical_gas": "ccl4",
+      "header_gas": "CCl4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/cf3i_swarm_output_full_EoverN.dat",
+      "sha256": "03fa7c5aec7422b4613ef00efca64c241a16b48e962b695c46b740c490e8d868",
+      "gas": "CF3I",
+      "canonical_gas": "cf3i",
+      "header_gas": "CF3I",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "MuroranIT",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/cf4_swarm_output_full_EoverN.dat",
+      "sha256": "d62b0151a8d84c77b7bcdd63c1ed4ed44374b50615497b23e019a97f084b0c2e",
+      "gas": "CF4",
+      "canonical_gas": "cf4",
+      "header_gas": "CF4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/ch4_swarm_output_full_EoverN.dat",
+      "sha256": "c42c71f62e3b6293b12a6acf2935a67b8c36fa68b03cb7c1d805d0946ffdcc34",
+      "gas": "CH4",
+      "canonical_gas": "ch4",
+      "header_gas": "CH4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/chf3_swarm_output_full_EoverN.dat",
+      "sha256": "27ab0c11aad11c7965c83c564a298ef22cefa6ecb3e15c145e6ccc53428e6557",
+      "gas": "CHF3",
+      "canonical_gas": "chf3",
+      "header_gas": "CHF3",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Bordage",
+      "batch": 1,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/cl2_swarm_output_full_EoverN.dat",
+      "sha256": "3b372d49456877c6d6c7246e5e57477855f23cee0cd4a4f272d76ffe6b7b1682",
+      "gas": "Cl2",
+      "canonical_gas": "cl2",
+      "header_gas": "Cl2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Morgan",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 153,
+        "Diffusion coefficient *N (1/m/s)": 153,
+        "Townsend ioniz. coef. alpha/N (m2)": 153,
+        "Total ionization freq. /N (m3/s)": 153
+      },
+      "common_e_over_n_min_Td": 10.22,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/co2_swarm_output_full_EoverN.dat",
+      "sha256": "4e9b24b718c9653915368ab42e5bfc5304dfccac865db0dc145858cf300dad31",
+      "gas": "CO2",
+      "canonical_gas": "co2",
+      "header_gas": "CO2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/co_swarm_output_full_EoverN.dat",
+      "sha256": "cbb15a57e705a9fb315e330f629c21fc2576b87903a8cab563dfb8e289d74dd7",
+      "gas": "CO",
+      "canonical_gas": "co",
+      "header_gas": "CO",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "IST-Lisbon",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/cu_swarm_output_full_EoverN.dat",
+      "sha256": "51649d3f2c75b831fa2a49df2ce0ff01c11aa00541780efb128f7361951fc6f0",
+      "gas": "Cu",
+      "canonical_gas": "cu",
+      "header_gas": "Cu",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "SIGLO",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/d2_swarm_output_full_EoverN.dat",
+      "sha256": "9955d9e817a7b0ac0adc92e8607b8494303b1c87572338be261b362cdb301582",
+      "gas": "D2",
+      "canonical_gas": "d2",
+      "header_gas": "D2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/f2_swarm_output_full_EoverN.dat",
+      "sha256": "27c587a0d973849e826e5c6c128896c58b9b818d575817e2181afcdae8981a54",
+      "gas": "F2",
+      "canonical_gas": "f2",
+      "header_gas": "F2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "SIGLO",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 399,
+        "Diffusion coefficient *N (1/m/s)": 399,
+        "Townsend ioniz. coef. alpha/N (m2)": 399,
+        "Total ionization freq. /N (m3/s)": 399
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 2890.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/h2_swarm_output_full_EoverN.dat",
+      "sha256": "6b554ca2bd997802d923e7dcffe176a6aa38a7444c109480f71e74050aaee278",
+      "gas": "H2",
+      "canonical_gas": "h2",
+      "header_gas": "H2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 392,
+        "Diffusion coefficient *N (1/m/s)": 392,
+        "Townsend ioniz. coef. alpha/N (m2)": 392,
+        "Total ionization freq. /N (m3/s)": 392
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 2225.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/h2o_swarm_output_full_EoverN.dat",
+      "sha256": "1be9eaaca9bafc57b30d01e2fd1bb27aaf16de8116a8b104e630f29a49403173",
+      "gas": "H2O",
+      "canonical_gas": "h2o",
+      "header_gas": "H2O",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Morgan",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/h_swarm_output_full_EoverN.dat",
+      "sha256": "0181eba014c0b0b067d2312988099e37f0df46edd3a917da748ca8425ed0f672",
+      "gas": "H",
+      "canonical_gas": "h",
+      "header_gas": "H",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Morgan",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 379,
+        "Diffusion coefficient *N (1/m/s)": 379,
+        "Townsend ioniz. coef. alpha/N (m2)": 379,
+        "Total ionization freq. /N (m3/s)": 379
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 1368.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/hcl_swarm_output_full_EoverN.dat",
+      "sha256": "08f1a79742fb6b816de17337330f0309de1e4a92d1d162898dae1ce3a499158b",
+      "gas": "HCl",
+      "canonical_gas": "hcl",
+      "header_gas": "HCl",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/he_swarm_output_full_EoverN.dat",
+      "sha256": "dd5c4e95410d4d008f79c2e92c2d9b0d809b0bedd8a38f8a79cd543ed7ddeb0a",
+      "gas": "He",
+      "canonical_gas": "he",
+      "header_gas": "He",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 370,
+        "Diffusion coefficient *N (1/m/s)": 370,
+        "Townsend ioniz. coef. alpha/N (m2)": 370,
+        "Total ionization freq. /N (m3/s)": 370
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 977.5
+    },
+    {
+      "filename": "lxcat_2026-07-20/hg_swarm_output_full_EoverN.dat",
+      "sha256": "fefbdddaeaa3e0653414e8b09e297d88a60b40975a4fc8e114bbe978c3f1bd0a",
+      "gas": "Hg",
+      "canonical_gas": "hg",
+      "header_gas": "Hg",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "SIGLO",
+      "batch": 2,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 381,
+        "Diffusion coefficient *N (1/m/s)": 381,
+        "Townsend ioniz. coef. alpha/N (m2)": 381,
+        "Total ionization freq. /N (m3/s)": 381
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 1475.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/kr_swarm_output_full_EoverN.dat",
+      "sha256": "6904afe1e9d1a258062119deda839702d334c3600b2f89711f990f162b29e6f4",
+      "gas": "Kr",
+      "canonical_gas": "kr",
+      "header_gas": "Kr",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/mg_swarm_output_full_EoverN.dat",
+      "sha256": "2981b0250fd431e3ccfd8a75d3ae4b8adcba28ea1b6d6c224612048013cc731c",
+      "gas": "Mg",
+      "canonical_gas": "mg",
+      "header_gas": "Mg",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Phelps",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/n2_swarm_output_full_EoverN.dat",
+      "sha256": "d4760327df56e18f484ac2099c21bbb13455c256dd608bc946a5efb6477f520e",
+      "gas": "N2",
+      "canonical_gas": "n2",
+      "header_gas": "N2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/n2o_swarm_output_full_EoverN.dat",
+      "sha256": "2cb2a15c73e700973c11bdda76f612b83627f05842c69001db6c0c416282f61a",
+      "gas": "N2O",
+      "canonical_gas": "n2o",
+      "header_gas": "N2O",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/na_swarm_output_full_EoverN.dat",
+      "sha256": "8ec9fcf0431edd14b1244e3f35ec6c645f444e6f24e65200ca8a59a69909ea03",
+      "gas": "Na",
+      "canonical_gas": "na",
+      "header_gas": "Na",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Phelps",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/ne_swarm_output_full_EoverN.dat",
+      "sha256": "45d33d30392a3f075a44dfa109de06d20596bb856106d6f9c5789883ee800c4f",
+      "gas": "Ne",
+      "canonical_gas": "ne",
+      "header_gas": "Ne",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 393,
+        "Diffusion coefficient *N (1/m/s)": 393,
+        "Townsend ioniz. coef. alpha/N (m2)": 393,
+        "Total ionization freq. /N (m3/s)": 393
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 2309.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/nh3_swarm_output_full_EoverN.dat",
+      "sha256": "7691e1eb4406709225d7b242aaaf3a61300e87f1a4c318a0613dee88da5e7863",
+      "gas": "NH3",
+      "canonical_gas": "nh3",
+      "header_gas": "NH3",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/no_swarm_output_full_EoverN.dat",
+      "sha256": "f3bf3ec4c862062a389590f71bd4d641853c083af3dd1427d2c265118e0a52ab",
+      "gas": "NO",
+      "canonical_gas": "no",
+      "header_gas": "NO",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/o2_swarm_output_full_EoverN.dat",
+      "sha256": "d6a7c9fe6cc7d0160fbee1dd46426dfc28164f7161f9d75072e96a4d4249c338",
+      "gas": "O2",
+      "canonical_gas": "o2",
+      "header_gas": "O2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/sf6_swarm_output_full_EoverN.dat",
+      "sha256": "960eb6e42b705ce7b1041a7c0658db222c82fa46c1324308e9c852a79adfd79d",
+      "gas": "SF6",
+      "canonical_gas": "sf6",
+      "header_gas": "SF6",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/si2h6_swarm_output_full_EoverN.dat",
+      "sha256": "bc6597673ba35797f1df66d00695ded0c5df2f07ac232748e66fb664afe790ee",
+      "gas": "Si2H6",
+      "canonical_gas": "si2h6",
+      "header_gas": "Si2H6",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/si_oc2h5_4_swarm_output_full_EoverN.dat",
+      "sha256": "e079ade893b23769f299ab4f2f823ff21095b30a36c269c03d309c0714d5f4fc",
+      "gas": "Si(OC2H5)4",
+      "canonical_gas": "si_oc2h5_4",
+      "header_gas": "Si(OC2H5)4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "MuroranIT",
+      "batch": 4,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/sih4_swarm_output_full_EoverN.dat",
+      "sha256": "1ade4cd98917f16b3482a12af2ac39970a3219ee721f3fc353235211f262c7fe",
+      "gas": "SiH4",
+      "canonical_gas": "sih4",
+      "header_gas": "SiH4",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/so2_swarm_output_full_EoverN.dat",
+      "sha256": "1d3ae3266188909e898c7fbf5867aa9dd3a664f74f2eeb1f910bdc600ea66f9b",
+      "gas": "SO2",
+      "canonical_gas": "so2",
+      "header_gas": "SO2",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Hayashi",
+      "batch": 3,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    },
+    {
+      "filename": "lxcat_2026-07-20/xe_swarm_output_full_EoverN.dat",
+      "sha256": "8354cbd4ee1f1f7f9ef0465e2798d1962ca0b49f5282cab03b0c90d70205745d",
+      "gas": "Xe",
+      "canonical_gas": "xe",
+      "header_gas": "Xe",
+      "gas_temperature_K": 300.0,
+      "lxcat_database": "Biagi",
+      "batch": 4,
+      "section_rows": {
+        "Mobility *N (1/m/V/s)": 400,
+        "Diffusion coefficient *N (1/m/s)": 400,
+        "Townsend ioniz. coef. alpha/N (m2)": 400,
+        "Total ionization freq. /N (m3/s)": 400
+      },
+      "common_e_over_n_min_Td": 0.001,
+      "common_e_over_n_max_Td": 3000.0
+    }
+  ]
+}

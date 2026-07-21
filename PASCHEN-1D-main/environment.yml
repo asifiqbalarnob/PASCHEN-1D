@@ -1,0 +1,8 @@
+name: paschen-1d-1.0.0
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11.8
+  - pip
+  - pip:
+      - -r requirements-dev.lock

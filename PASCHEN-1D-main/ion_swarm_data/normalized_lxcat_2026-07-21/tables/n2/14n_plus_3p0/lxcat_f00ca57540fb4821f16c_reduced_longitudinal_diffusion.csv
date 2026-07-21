@@ -1,0 +1,38 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_f00ca57540fb4821f16c"
+# quantity: "reduced_longitudinal_diffusion"
+# reduced_quantity: "N_times_D_longitudinal"
+# units: "1/(m s)"
+# ion: "14N^+(3P0)"
+# neutral: "N2"
+# gas_temperature_K: 300.0
+# database: "Viehland database"
+# process: "Diffusion x gas density (NDz)"
+# parameters: "Tgas = 300 K"
+# group_comment: "Compiled NDL of Ellis et al., At. Data Nucl. Data Tables 22 (1978) 179."
+# source_family: "compiled ndl of ellis et al., at. data nucl. data tables 22 (1978) 179."
+# comment: ""
+# updated: "2011-12-13 14:12:40"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_034_7986_7986/001_diffusion_x_gas_density.txt"
+# source_file_sha256: "a9e92fec8a2e35ec218d3dd8946dbb3b7090ff97996e98d79a44c743e807ca31"
+reduced_electric_field_Td,reduced_transport_SI
+7.000000000000e+00,2.150000000000e+20
+8.000000000000e+00,2.170000000000e+20
+1.000000000000e+01,2.240000000000e+20
+1.200000000000e+01,2.300000000000e+20
+1.500000000000e+01,2.350000000000e+20
+2.000000000000e+01,2.490000000000e+20
+2.500000000000e+01,2.660000000000e+20
+3.000000000000e+01,2.870000000000e+20
+4.000000000000e+01,3.340000000000e+20
+5.000000000000e+01,3.920000000000e+20
+6.000000000000e+01,4.600000000000e+20
+8.000000000000e+01,6.300000000000e+20
+1.000000000000e+02,8.400000000000e+20
+1.200000000000e+02,1.080000000000e+21
+1.500000000000e+02,1.520000000000e+21
+2.000000000000e+02,2.420000000000e+21
+2.500000000000e+02,3.560000000000e+21
+3.000000000000e+02,5.020000000000e+21

@@ -1,0 +1,4 @@
+-r requirements-runtime.lock
+pytest==7.4.0
+jupyterlab==3.6.7
+ipykernel==6.28.0

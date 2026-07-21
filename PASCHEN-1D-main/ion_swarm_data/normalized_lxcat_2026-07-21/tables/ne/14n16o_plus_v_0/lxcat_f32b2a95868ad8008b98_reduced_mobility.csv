@@ -1,0 +1,32 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_f32b2a95868ad8008b98"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "14N16O+(v=0)"
+# neutral: "Ne"
+# gas_temperature_K: 100.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 100 K"
+# group_comment: "Mobilities for the NO+_NG systems, calculated by Monte Carlo methods of Skullerud (2021) and of Viehland et al. (2021), using the ab initio, shifted potentials of Orek et al., J. Chem. Phys. 144 (2016) 204303."
+# source_family: "mobilities for the no+_ng systems, calculated by monte carlo methods of skullerud (2021) and of viehland et al. (2021), using the ab initio, shifted potentials of orek et al., j. chem. phys. 144 (2016) 204303."
+# comment: "Mobilities for the NO+_RG systems, calculated by Monte Carlo methods of Skullerud (2021)"
+# updated: "2016-03-05 12:56:44"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ion_13988_neutral_38_39_40/005_mobility_vs_reduced_electric_field.txt"
+# source_file_sha256: "054bb1b0020b61793afa8cc8ce954bf761880c5022d88e20459687d809417f27"
+reduced_electric_field_Td,reduced_transport_SI
+5.000000000000e+00,1.691246210813e+22
+1.000000000000e+01,1.743430600253e+22
+2.000000000000e+01,1.975051861310e+22
+3.000000000000e+01,2.180660477020e+22
+4.000000000000e+01,2.191081445033e+22
+6.000000000000e+01,2.078015267913e+22
+8.000000000000e+01,1.933818769044e+22
+1.000000000000e+02,1.812134743058e+22
+1.200000000000e+02,1.704477923379e+22
+1.500000000000e+02,1.578498231189e+22
+1.800000000000e+02,1.480413852867e+22
+2.000000000000e+02,1.427168805105e+22

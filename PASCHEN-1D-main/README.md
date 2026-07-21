@@ -1,0 +1,283 @@
+# PASCHEN-1D
+
+Current release: **1.0.0 (2026-07-21)**.
+
+PASCHEN-1D is a one-dimensional drift-diffusion-Poisson plasma solver with
+surface-emission physics and external-circuit coupling. It is intended for
+gas-breakdown, pulsed-discharge, plasma-surface interaction, and
+plasma-circuit studies where electron/ion transport, sheath evolution,
+emission, ionization, and the external circuit are strongly coupled.
+
+## Scope of This Release
+
+This release supports two electron-kinetics branches:
+
+- `user_defined_electron_kinetics`
+- `local_field_approximation`
+
+The local-field branch can use user-defined transport/ionization formulas or
+table interpolation from bundled/BOLSIG+-style swarm-output files. Electron
+energy equation / energy PDE models are not included in this release.
+
+Positive-ion kinetics can use the original user-defined closures or the
+`local_field_ion_kinetics` branch. The latter accepts independently selected,
+strictly validated reduced-mobility and longitudinal-diffusion tables, or an
+explicit Einstein-relation diffusion closure.
+
+## Key Capabilities
+
+- 1D electron/ion continuity with Kurganov-Tadmor fluxes and slope limiting.
+- Self-consistent Poisson solve with emission/sheath boundary iteration.
+- Surface-emission coupling through boundary-face electron fluxes.
+- Secondary, thermionic, field, Richardson-Dushman, constant-current-density,
+  and quantum-pulse photoemission models.
+- Configurable gas/transport/ionization models, including local-field tables.
+- Explicit, implicit, and MNA-based circuit coupling.
+- Unified maximum circuit topology
+  `R0_Cs_Ls_Cp_Lp_Rm_Cext` for custom lumped circuits.
+- Load-side stray capacitance support through `C_ext`.
+- Optional dielectric-layer mapping at the electrodes.
+- NumPy or Numba hot-loop backend.
+- Saved-run diagnostics notebooks for temporal profiles, spatial snapshots,
+  and time/cycle-averaged spatial profiles.
+
+## Package Contents
+
+Core solver modules:
+
+- `paschen_1d.py`
+- `numerics.py`
+- `numerics_jit.py`
+- `physics.py`
+- `ion_transport.py`
+- `emission.py`
+- `circuit.py`
+- `circuit_implicit_euler.py`
+- `circuit_mna.py`
+- `outputs.py`
+- `physical_constants.py`
+
+Configuration and case loading:
+
+- `config.py`
+- `config_loader.py`
+- `config_case_argon_photoemission_discharge.py`
+- `config_case_argon_dc_discharge.py`
+- `config_case_nitrogen_pulsed_discharge.py`
+- `config_case_deuterium_pulsed_discharge.py`
+
+User notebooks:
+
+- `run_paschen_1d.ipynb`
+- `diagnostics_temporal_profiles.ipynb`
+- `diagnostics_spatial_snapshots.ipynb`
+- `diagnostics_spatial_averages.ipynb`
+
+Diagnostics helpers:
+
+- `diagnostics_io.py`
+- `diagnostics_plotting.py`
+- `derived_diagnostics.py`
+
+Bundled swarm-data examples:
+
+- `electron_swarm_data/lxcat_2026-07-20/` (electron tables)
+- `ion_swarm_data/` (preserved raw LXCat ion exports, normalized tables, and manifest)
+
+Swarm-table values in configuration files are portable filenames or paths
+relative to these two data roots. PASCHEN-1D locates a unique basename
+recursively, so users do not copy tables beside the source code and do not use
+absolute paths tied to one computer.
+
+Validation report:
+
+- `ION_TRANSPORT_VALIDATION.md`
+
+## Quick Start
+
+1. Open `run_paschen_1d.ipynb`.
+2. Choose a case by setting `CONFIG_MODULE`, for example:
+
+   ```python
+   CONFIG_MODULE = "config_case_argon_photoemission_discharge"
+   ```
+
+3. Run the notebook. Results are written to the folder named by
+   `cfg.run.run_name`.
+4. Use one of the diagnostics notebooks to inspect the saved run:
+
+   - `diagnostics_temporal_profiles.ipynb`
+   - `diagnostics_spatial_snapshots.ipynb`
+   - `diagnostics_spatial_averages.ipynb`
+
+`config.py` is the single canonical configuration model and guided reference.
+Case files are small subclasses that contain only their case-specific values;
+they do not duplicate dataclass definitions.
+
+## Configuration Structure
+
+`SimulationConfig` is organized into 18 grouped dataclasses:
+
+1. `run`
+2. `numerics`
+3. `geometry`
+4. `plasma_state`
+5. `plasma`
+6. `user_defined_electron_kinetics`
+7. `local_field_approximation`
+8. `electron_swarm_data`
+9. `ion_transport`
+10. `townsend_coefficient`
+11. `ionization_frequency_source`
+12. `recombination`
+13. `waveform`
+14. `boundary`
+15. `circuit`
+16. `emission`
+17. `output`
+18. `diagnostics`
+
+Runtime modules use grouped access such as `cfg.geometry.L`,
+`cfg.run.T_total`, and `cfg.circuit.R_m`.
+
+## Circuit Usage
+
+For standard reduced circuits, choose a named topology with physical finite
+values for the elements in that topology. Examples include:
+
+- `dielectric_plasma`
+- `R0_Cp`
+- `R0_Cp_Rm`
+- `R0_Rm_Cext`
+- `R0_Cs_Cp`
+- `R0_Cs_Cp_Rm`
+- `R0_Cs_Ls_Cp`
+- `R0_Cs_Ls_Cp_Rm`
+- `R0_Cs_Ls_Cp_Lp`
+- `R0_Cs_Ls_Cp_Lp_Rm_Cext`
+
+For a custom circuit that is not available as a reduced topology, use:
+
+```python
+cfg.circuit.circuit_type = "R0_Cs_Ls_Cp_Lp_Rm_Cext"
+cfg.circuit.circuit_time_scheme = "mna"
+```
+
+In MNA mode, elements may be removed with neutral values:
+
+- `R0 = 0.0`
+- `C_s = np.inf`
+- `L_s = 0.0`
+- `C_p = 0.0`
+- `L_p = np.inf`
+- `R_m = 0.0`
+- `C_ext = 0.0`
+
+## Diagnostics
+
+The main run notebook includes optional quick-look plots immediately after a
+simulation. For saved-run analysis, use the dedicated diagnostics notebooks.
+Each notebook exposes user-editable plot controls, figure-saving knobs, and
+optional grouped-plot controls.
+
+Available diagnostics include:
+
+- temporal circuit/plasma quantities such as `V_app`, `V_node`, `V_gap`,
+  `I_discharge`, current components, CFL, Picard iterations, and particle
+  inventory;
+- spatial snapshots of `ne`, `ni`, `phi`, `E`, fluxes, ionization quantities,
+  mobilities/diffusivities, and source terms;
+- time-window or cycle-averaged spatial profiles;
+- derived sheath metrics computed from saved density/potential/field profiles.
+
+When intermediate logging is enabled, both electron (`mu_e`, `D_e`) and ion
+(`mu_i`, `D_i`) transport profiles are written. `run_metadata.json` records the
+selected ion, source modes, normalized table checksums, LXCat dataset IDs,
+citations, raw source checksums, gas temperature, and ion/neutral identities.
+
+## LXCat Ion Transport Workflow
+
+The raw acquisition and normalization steps are reproducible:
+
+```bash
+python tools/download_lxcat_ion_data.py
+python tools/normalize_lxcat_ion_data.py
+```
+
+Raw LXCat files are preserved verbatim. Normalization never averages or splices
+independent measurements. Select a mobility and diffusion pair from
+`ion_swarm_data/normalized_lxcat_2026-07-21/manifest.json`, then configure:
+
+```python
+cfg.plasma.ion_kinetics_model = "local_field_ion_kinetics"
+cfg.ion_transport.positive_ion = "D3+"
+cfg.ion_transport.mobility_source_mode = "swarm_data_table_interpolation"
+cfg.ion_transport.diffusion_source_mode = "swarm_data_table_interpolation"
+cfg.ion_transport.mobility_table_path = "<unique-mobility-filename>.csv"
+cfg.ion_transport.diffusion_table_path = "<unique-diffusion-filename>.csv"
+```
+
+At startup, PASCHEN-1D rejects missing files, malformed data, wrong quantities,
+ion/neutral mismatches, temperature mismatches, and unsupported selectors. E/N
+values outside a selected table use the explicit `clip` or `error` policy.
+
+## Output Files
+
+Each run writes a folder named by `cfg.run.run_name`. Common files include:
+
+- scalar histories: `Vgap_mm.dat`, `Idischarge_mm.dat`, `c_cfl_mm.dat`
+- optional scalar histories: `Vnode_mm.dat`, `Vsource_mm.dat`,
+  `picard_iterations_mm.dat`, `adaptive_substeps_mm.dat`,
+  `adaptive_dt_sub_mm.dat`, `adaptive_cfl_est_mm.dat`
+- sampled fields: `ne_sampled_mm.dat`, `ni_sampled_mm.dat`,
+  `phi_sampled_mm.dat`, `E_sampled_mm.dat`
+- optional sampled intermediates: `Gamma_i_sampled_mm.dat`,
+  `Gamma_e_sampled_mm.dat`, `townsend_alpha_sampled_mm.dat`,
+  `nu_i_sampled_mm.dat`, `S_ion_sampled_mm.dat`, `S_sampled_mm.dat`,
+  `mu_e_sampled_mm.dat`, `D_e_sampled_mm.dat`, `mu_i_sampled_mm.dat`,
+  `D_i_sampled_mm.dat`
+- metadata: `run_metadata.json`
+
+## Swarm-Data Format
+
+Electron tables are authenticated by `electron_swarm_data/manifest.json` and
+must contain all four named `E/N (Td)` sections below. Generic two-column
+fallbacks are intentionally not accepted:
+
+- `Mobility *N (1/m/V/s)`
+- `Diffusion coefficient *N (1/m/s)`
+- `Townsend ioniz. coef. alpha/N (m2)`
+- `Total ionization frequency /N (m3/s)`
+
+## Reproducibility and Release Checks
+
+For the exact verified environment, install `requirements-dev.lock` or create
+the Conda environment in `environment.yml`. Run the complete automated gate:
+
+```bash
+python -m pytest -q
+python tools/build_electron_manifest.py --check
+python tools/audit_swarm_data.py
+```
+
+The command-line runner is also available:
+
+```bash
+python paschen_1d.py --config config_case_deuterium_pulsed_discharge
+```
+
+`tools/build_release_archive.py` produces a deterministic source archive and
+SHA-256 file under `dist/`. It contains code, notebooks, tests, and both swarm
+libraries while excluding generated results and caches. See `CHANGELOG.md`,
+`CITATION.cff`, `THIRD_PARTY_NOTICES.md`, and `PRODUCTION_REGRESSION.md` for
+release, source, and full-resolution recovery details.
+
+## License and Citation
+
+- License file: `LICENSE`
+- Commercial use is not permitted without separate written permission.
+- Any use, modification, redistribution, or publication must acknowledge/cite:
+
+Asif Iqbal, Yves Heri, Bingqing Wang, Lan Jin, Md Arifuzzaman Faisal, and
+Peng Zhang, "PASCHEN-1D: A one-dimensional fluid plasma solver with
+multi-mechanism surface emission and flexible external circuit coupling".

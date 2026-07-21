@@ -1,0 +1,38 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_2d776ed0e7169e4d6983"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "20Ne^+(2P1/2)"
+# neutral: "Ne"
+# gas_temperature_K: 77.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 77 K"
+# group_comment: ""
+# source_family: ""
+# comment: "Mobility Data for P1/2 State of Helm and Elford, J. Phys. B 10 (1977) 983."
+# updated: "2011-12-13 14:22:42"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_103_7998_7998/001_mobility.txt"
+# source_file_sha256: "889955836ba1bd2e152280c667b040a5d703e61f90e1864672d612ea5062427a"
+reduced_electric_field_Td,reduced_transport_SI
+2.100000000000e+01,1.331126194052e+22
+2.300000000000e+01,1.304609736003e+22
+2.500000000000e+01,1.283396569564e+22
+2.700000000000e+01,1.264835048930e+22
+2.900000000000e+01,1.243621882490e+22
+3.100000000000e+01,1.225060361856e+22
+3.900000000000e+01,1.148162633515e+22
+4.100000000000e+01,1.134904404490e+22
+4.300000000000e+01,1.118994529661e+22
+4.500000000000e+01,1.103084654832e+22
+4.700000000000e+01,1.089826425807e+22
+4.900000000000e+01,1.076568196783e+22
+5.100000000000e+01,1.063309967758e+22
+5.300000000000e+01,1.050051738734e+22
+5.500000000000e+01,1.039445155514e+22
+6.000000000000e+01,1.010277051661e+22
+6.500000000000e+01,9.837605936119e+21
+7.000000000000e+01,9.598957813679e+21

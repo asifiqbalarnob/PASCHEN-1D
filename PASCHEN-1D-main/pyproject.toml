@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paschen-1d"
+dynamic = ["version"]
+description = "One-dimensional drift-diffusion-Poisson plasma solver with swarm transport and circuit coupling"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Asif Iqbal"},
+  {name = "Yves Heri"},
+  {name = "Bingqing Wang"},
+  {name = "Lan Jin"},
+  {name = "Md Arifuzzaman Faisal"},
+  {name = "Peng Zhang"},
+]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "matplotlib>=3.7",
+  "tqdm>=4.65",
+  "numba>=0.59",
+]
+
+[project.optional-dependencies]
+notebooks = ["jupyterlab>=4.0", "ipykernel>=6.0"]
+data-tools = ["requests>=2.31", "beautifulsoup4>=4.12"]
+test = ["pytest>=7.4"]
+
+[project.scripts]
+paschen-1d = "paschen_1d:main"
+
+[tool.setuptools]
+py-modules = [
+  "circuit",
+  "circuit_implicit_euler",
+  "circuit_mna",
+  "config",
+  "config_case_argon_dc_discharge",
+  "config_case_argon_photoemission_discharge",
+  "config_case_deuterium_pulsed_discharge",
+  "config_case_helium_photoemission_discharge",
+  "config_case_nitrogen_pulsed_discharge",
+  "config_loader",
+  "data_paths",
+  "derived_diagnostics",
+  "diagnostics_io",
+  "diagnostics_plotting",
+  "electron_transport",
+  "emission",
+  "ion_transport",
+  "numerics",
+  "numerics_jit",
+  "outputs",
+  "paschen_1d",
+  "physical_constants",
+  "physics",
+  "validation",
+  "version",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "version.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

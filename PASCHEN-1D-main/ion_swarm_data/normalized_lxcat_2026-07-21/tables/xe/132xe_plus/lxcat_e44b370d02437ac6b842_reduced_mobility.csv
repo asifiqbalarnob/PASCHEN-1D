@@ -1,0 +1,34 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_e44b370d02437ac6b842"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "132Xe^+"
+# neutral: "Xe"
+# gas_temperature_K: 293.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 293 K"
+# group_comment: ""
+# source_family: ""
+# comment: "Mobility Data for P3/2 State of Helm, J. Phys. B 9 (1976) 152."
+# updated: "2010-05-14 15:04:20"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_039_45_45/001_mobility.txt"
+# source_file_sha256: "036a71ce17b94020f7ad10bb2c545ffe5c006c1512fe79a3d0e37dd030259ba0"
+reduced_electric_field_Td,reduced_transport_SI
+4.000000000000e+01,1.377529995637e+21
+5.000000000000e+01,1.360824627066e+21
+6.000000000000e+01,1.341997941852e+21
+7.000000000000e+01,1.323171256637e+21
+8.000000000000e+01,1.306200723486e+21
+1.000000000000e+02,1.271198998861e+21
+1.200000000000e+02,1.236197274237e+21
+1.400000000000e+02,1.201195549612e+21
+1.500000000000e+02,1.185816003944e+21
+1.600000000000e+02,1.169640964534e+21
+1.700000000000e+02,1.153731089705e+21
+1.800000000000e+02,1.138616708617e+21
+1.900000000000e+02,1.124562985851e+21
+2.200000000000e+02,1.083197311295e+21

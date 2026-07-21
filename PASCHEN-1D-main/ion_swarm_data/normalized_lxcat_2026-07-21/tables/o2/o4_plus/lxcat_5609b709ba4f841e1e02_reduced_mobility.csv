@@ -1,0 +1,28 @@
+# format: "paschen-1d-ion-transport-v1"
+# dataset_id: "lxcat_5609b709ba4f841e1e02"
+# quantity: "reduced_mobility"
+# reduced_quantity: "K0_times_N0"
+# units: "1/(m V s)"
+# ion: "O4^+"
+# neutral: "O2"
+# gas_temperature_K: 300.0
+# database: "Viehland database"
+# process: "Mobility (Ko)"
+# parameters: "Tgas = 300 K"
+# group_comment: "Raw mobility Data from Technical Reports from Georgia Tech, 1970-1974."
+# source_family: "raw transport data from technical reports from georgia tech, 1970-1974."
+# comment: ""
+# updated: "2010-05-14 15:04:20"
+# permalink: "www.lxcat.net/Viehland"
+# reference: "L. A. Viehland and C. C. Kirkpatrick, Int. J. Mass Spectrom. Ion Proc. 149/150 (1995) 555."
+# source_file: "raw_lxcat/lxcat_ion_swarm_2026-07-21/batches/ions_097_281_281/001_mobility.txt"
+# source_file_sha256: "b5c52b7ea1c24a2697e323e6fed555a5221a60e273d43a956c9184b9e0cebabd"
+reduced_electric_field_Td,reduced_transport_SI
+2.560000000000e+00,5.727554938549e+21
+2.610000000000e+00,5.650657210207e+21
+2.760000000000e+00,5.791194437866e+21
+3.390000000000e+00,5.666567085037e+21
+4.600000000000e+00,5.714296709524e+21
+5.250000000000e+00,5.597624294110e+21
+6.870000000000e+00,5.703690126305e+21
+7.790000000000e+00,5.706341772110e+21
