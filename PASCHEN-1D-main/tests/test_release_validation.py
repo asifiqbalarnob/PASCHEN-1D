@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ import data_paths
 from config import SimulationConfig
 from electron_transport import REQUIRED_SECTIONS, load_electron_swarm_table
 from ion_transport import load_ion_transport_table
+from tools.build_release_archive import included_files
 from validation import validate_simulation_config
 
 
@@ -76,6 +79,35 @@ class ReleaseValidationTests(unittest.TestCase):
             with patch("data_paths.ELECTRON_SWARM_DATA_DIR", root):
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                     load_electron_swarm_table(record["filename"])
+
+    def test_electron_manifest_check_is_portable_without_bolsig_source(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            missing_generation_manifest = Path(directory) / "not-present.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(project_root / "tools" / "build_electron_manifest.py"),
+                    "--check",
+                    "--generation-manifest",
+                    str(missing_generation_manifest),
+                ],
+                cwd=project_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+
+    def test_release_archive_excludes_generated_packaging_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "keep.py"
+            source.write_text("pass\n", encoding="utf-8")
+            generated = root / "paschen_1d.egg-info" / "SOURCES.txt"
+            generated.parent.mkdir()
+            generated.write_text("generated\n", encoding="utf-8")
+            self.assertEqual(included_files(root), [source])
 
     def test_modified_bundled_ion_table_fails_manifest_checksum(self) -> None:
         normalized = data_paths.ION_SWARM_DATA_DIR / "normalized_lxcat_2026-07-21"

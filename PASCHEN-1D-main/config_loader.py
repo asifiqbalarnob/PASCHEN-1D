@@ -19,7 +19,7 @@ def _module_name(config_module: str) -> str:
 
 def load_config_module(config_module: str = "config") -> ModuleType:
     """
-    Load a case module defining a ``SimulationConfig`` subclass.
+    Load a standalone configuration module defining ``SimulationConfig``.
 
     Parameters
     ----------

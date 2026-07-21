@@ -65,6 +65,51 @@ def section_axes(path: Path) -> dict[str, list[float]]:
     return axes
 
 
+def validate_committed_manifest(tables: Path, manifest_path: Path) -> None:
+    """Authenticate a bundled manifest without the external generation archive."""
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if payload.get("format") != FORMAT:
+        raise ValueError(f"Unsupported electron manifest format in {manifest_path}")
+    if payload.get("required_sections") != list(REQUIRED_SECTIONS):
+        raise ValueError(f"Electron manifest section schema mismatch in {manifest_path}")
+
+    records = payload.get("tables")
+    if not isinstance(records, list) or payload.get("table_count") != len(records):
+        raise ValueError(f"Electron manifest table count mismatch in {manifest_path}")
+    source_checksum = str(payload.get("source_generation_manifest_sha256", ""))
+    if re.fullmatch(r"[0-9a-f]{64}", source_checksum) is None:
+        raise ValueError(f"Invalid source-generation checksum in {manifest_path}")
+
+    table_paths = sorted(tables.glob("*_swarm_output_full_EoverN.dat"))
+    table_names = {path.name for path in table_paths}
+    manifest_names = {Path(str(record.get("filename", ""))).name for record in records}
+    if len(manifest_names) != len(records) or manifest_names != table_names:
+        raise ValueError(
+            "Electron manifest filenames do not exactly match the bundled tables."
+        )
+
+    for record in records:
+        path = tables / Path(str(record["filename"])).name
+        if sha256_file(path) != record.get("sha256"):
+            raise ValueError(f"Electron table checksum mismatch: {path}")
+        temperature, header_gas = parse_header(path)
+        if temperature != record.get("gas_temperature_K"):
+            raise ValueError(f"Electron table temperature mismatch: {path}")
+        if header_gas != record.get("header_gas"):
+            raise ValueError(f"Electron table gas identity mismatch: {path}")
+
+        axes = section_axes(path)
+        section_rows = {label: len(axis) for label, axis in axes.items()}
+        if section_rows != record.get("section_rows"):
+            raise ValueError(f"Electron table section-row mismatch: {path}")
+        common_min = max(axis[0] for axis in axes.values())
+        common_max = min(axis[-1] for axis in axes.values())
+        if common_min != record.get("common_e_over_n_min_Td"):
+            raise ValueError(f"Electron table minimum E/N mismatch: {path}")
+        if common_max != record.get("common_e_over_n_max_Td"):
+            raise ValueError(f"Electron table maximum E/N mismatch: {path}")
+
+
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
     repository_root = project_root.parent
@@ -95,6 +140,15 @@ def main() -> None:
         help="Fail if the committed manifest differs instead of rewriting it.",
     )
     args = parser.parse_args()
+
+    if args.check and not args.generation_manifest.is_file():
+        validate_committed_manifest(args.tables, args.output)
+        return
+    if not args.generation_manifest.is_file():
+        raise FileNotFoundError(
+            "Regenerating the electron manifest requires the preserved BOLSIG+ "
+            f"generation manifest: {args.generation_manifest}"
+        )
 
     generation = json.loads(args.generation_manifest.read_text(encoding="utf-8"))
     usable = {

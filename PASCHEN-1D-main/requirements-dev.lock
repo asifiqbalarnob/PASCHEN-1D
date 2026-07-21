@@ -1,4 +1,6 @@
 -r requirements-runtime.lock
+setuptools==68.2.2
+wheel==0.41.2
 pytest==7.4.0
 jupyterlab==3.6.7
 ipykernel==6.28.0

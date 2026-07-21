@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import fields, is_dataclass
+import importlib
 import unittest
 from pathlib import Path
 
@@ -9,7 +11,23 @@ from paschen_1d import validate_simulation_config
 
 
 class ConfigurationTests(unittest.TestCase):
-    def test_case_modules_share_canonical_model(self) -> None:
+    @staticmethod
+    def _module_dataclass_schema(module: object) -> dict[str, tuple[tuple[str, str], ...]]:
+        return {
+            name: tuple(
+                (
+                    item.name,
+                    str(item.type).replace(f"{module.__name__}.", ""),
+                )
+                for item in fields(value)
+            )
+            for name, value in vars(module).items()
+            if isinstance(value, type)
+            and value.__module__ == module.__name__
+            and is_dataclass(value)
+        }
+
+    def test_case_modules_are_complete_standalone_configurations(self) -> None:
         expected = {
             "config_case_argon_photoemission_discharge": ("argon", "Ar+"),
             "config_case_nitrogen_pulsed_discharge": ("nitrogen", "N2+"),
@@ -17,9 +35,17 @@ class ConfigurationTests(unittest.TestCase):
             "config_case_deuterium_pulsed_discharge": ("deuterium", "D3+"),
             "config_case_helium_photoemission_discharge": ("helium", "4He+"),
         }
+        reference_schema = self._module_dataclass_schema(config)
         for module_name, (gas, ion) in expected.items():
+            module = importlib.import_module(module_name)
             case_type, _ = load_simulation_case(module_name)
-            self.assertTrue(issubclass(case_type, config.SimulationConfig))
+            self.assertIs(case_type, module.SimulationConfig)
+            self.assertIsNot(case_type, config.SimulationConfig)
+            self.assertEqual(
+                self._module_dataclass_schema(module),
+                reference_schema,
+                msg=f"{module_name} configuration schema differs from config.py",
+            )
             case = case_type()
             self.assertEqual(case.plasma_state.gas, gas)
             self.assertEqual(case.ion_transport.positive_ion, ion)

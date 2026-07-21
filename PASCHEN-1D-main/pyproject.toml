@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools==68.2.2", "wheel==0.41.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -34,6 +34,8 @@ test = ["pytest>=7.4"]
 paschen-1d = "paschen_1d:main"
 
 [tool.setuptools]
+include-package-data = true
+packages = ["electron_swarm_data", "ion_swarm_data"]
 py-modules = [
   "circuit",
   "circuit_implicit_euler",

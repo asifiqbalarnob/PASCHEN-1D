@@ -38,7 +38,10 @@ def included_files(root: Path) -> list[Path]:
     }
     files = []
     for path in root.rglob("*"):
-        if not path.is_file() or any(part in EXCLUDED_PARTS for part in path.parts):
+        if not path.is_file() or any(
+            part in EXCLUDED_PARTS or part.endswith(".egg-info")
+            for part in path.parts
+        ):
             continue
         if any(parent in output_directories for parent in path.resolve().parents):
             continue

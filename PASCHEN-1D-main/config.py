@@ -8,9 +8,8 @@ with ``# %% [markdown]`` and ``# %%`` cell markers so editors such as VS Code,
 Spyder, and Jupytext can display it as a notebook-like guided configuration
 document.
 
-The numerical defaults are the same as
-``config_case_argon_photoemission_discharge.py``. They define an argon
-photoemission transient with a reduced source-side circuit:
+The numerical defaults define an argon photoemission transient with a reduced
+source-side circuit:
 
     V_app(t) -- R0 -- V_node -- R_m -- V_gap
                                      |
@@ -48,6 +47,11 @@ controls in this order:
 
 All runtime modules should access grouped fields explicitly
 (`cfg.geometry.*`, `cfg.waveform.*`, etc.).
+
+Every ``config_case_*.py`` module carries the same complete type-alias and
+dataclass structure with case-tuned defaults. When the public configuration
+schema changes, update all configuration modules together; the release tests
+verify that their dataclass field structures remain identical.
 """
 
 # %% [markdown]
@@ -64,8 +68,9 @@ All runtime modules should access grouped fields explicitly
 # 3. Keep `run.run_name` unique for each run; it becomes the output folder.
 # 4. For quick one-off changes, override fields in `run_paschen_1d.ipynb`
 #    after `cfg = SimulationConfig()`.
-# 5. For reusable cases, subclass this model in a small `config_case_*.py`
-#    module instead of duplicating dataclasses or changing solver files.
+# 5. For reusable cases, copy a complete configuration module and tune its
+#    dataclass defaults. The bundled `config_case_*.py` files are standalone
+#    examples with the full configuration structure.
 #
 # **Important convention**
 #
@@ -269,7 +274,7 @@ class NumericsConfig:
     Nx: int = 200
     # Kurganov-Tadmor slope limiter parameter (theta >= 1).
     kt_limiter_theta: float = 1.1
-    # Backend for density-update hot loops (KT+RK4):
+    # Backend for density-update hot loops (KT+RK4). Options:
     # - "numpy": vectorized NumPy path with reusable RK4 workspaces
     # - "numba": JIT-compiled linear KT+RK4 kernel (falls back to NumPy if unavailable)
     hotloop_backend: HotloopBackend = "numba"
@@ -289,7 +294,7 @@ class NumericsConfig:
     target_cfl_substep: float = 0.5
     # Hard cap on the number of substeps allowed per macro step.
     max_substeps: int = 16
-    # Behavior when required substeps exceed max_substeps:
+    # Behavior when required substeps exceed max_substeps. Options:
     # - "warn_and_cap": warn and run with n_sub=max_substeps
     # - "error": raise RuntimeError and stop
     adaptive_substep_overflow_policy: AdaptiveSubstepOverflowPolicy = "warn_and_cap"
@@ -386,27 +391,28 @@ class PlasmaStateConfig:
 class PlasmaConfig:
     """Top-level plasma-physics model selectors."""
 
-    # Electron kinetics model:
+    # Electron kinetics model. Options:
     # - "user_defined_electron_kinetics":
     #      electron transport from user equations in physics.py
     # - "local_field_approximation":
     #      electron transport from local E/N (table or user equation)
     electron_kinetics_model: ElectronKineticsModel = "user_defined_electron_kinetics"
 
-    # Ion kinetics model:
+    # Ion kinetics model. Options:
     # - "user_defined_ion_kinetics": empirical hooks in physics.py
     # - "local_field_ion_kinetics": E/N tables and/or Einstein diffusion
     ion_kinetics_model: IonKineticsModel = "user_defined_ion_kinetics"
 
-    # Impact-ionization model:
+    # Impact-ionization model. Options:
     # - "from_townsend_alpha":
     #      nu_i = alpha * |u_e|, with alpha source from TownsendCoefficientConfig
     # - "from_ionization_frequency":
     #      nu_i source from IonizationFrequencySourceConfig
     impact_ionization_model: ImpactIonizationModel = "from_townsend_alpha"
 
-    # Recombination model (current implementation uses a single user-defined
-    # constant coefficient from RecombinationConfig).
+    # Recombination model. Options:
+    # - "user_defined_constant_coefficient": use the constant coefficient
+    #   from RecombinationConfig (the only currently supported option)
     recombination_model: RecombinationModel = "user_defined_constant_coefficient"
 
 
@@ -441,7 +447,7 @@ class UserDefinedElectronKineticsConfig:
 class TownsendCoefficientConfig:
     """Controls for Townsend-alpha sourcing in alpha-based ionization mode."""
 
-    # Townsend-alpha source mode:
+    # Townsend-alpha source mode. Options:
     # - "user_defined_equation":
     #      alpha from physics.py -> compute_user_defined_townsend_alpha(...)
     # - "interpolate_from_e_over_n_table":
@@ -470,7 +476,7 @@ class TownsendCoefficientConfig:
 class IonizationFrequencySourceConfig:
     """Controls for direct nu_i sourcing in impact-ionization mode."""
 
-    # Direct ionization-frequency source mode:
+    # Direct ionization-frequency source mode. Options:
     # - "user_defined_equation":
     #      nu_i from physics.py -> compute_user_defined_ionization_frequency(...)
     # - "interpolate_from_e_over_n_table":
@@ -526,11 +532,11 @@ class LocalFieldApproximationConfig:
     LFA uses local E/N to evaluate electron transport coefficients.
     """
 
-    # Electron transport source for LFA.
-    # If set to "user_defined_equation", define equations in:
+    # Electron transport source for LFA. Options:
+    # - "user_defined_equation": define equations in:
     #   physics.py -> compute_user_defined_electron_mobility(...)
     #   physics.py -> compute_user_defined_electron_diffusion(...)
-    # If set to "swarm_data_table_interpolation", interpolation is handled in:
+    # - "swarm_data_table_interpolation": interpolate the configured table in:
     #   physics.py -> build_electron_mobility_profile(...)
     #   physics.py -> build_electron_diffusion_profile(...)
     electron_transport_source: TransportSourceMode = "swarm_data_table_interpolation"
@@ -544,7 +550,9 @@ class LocalFieldApproximationConfig:
 class ElectronSwarmDataConfig:
     """Validation and interpolation policy shared by all electron tables."""
 
-    # Behavior when local E/N leaves a selected BOLSIG+ table range.
+    # Behavior when local E/N leaves a selected BOLSIG+ table range. Options:
+    # - "clip": use the nearest endpoint value outside the table range
+    # - "error": stop the run when any requested E/N is outside the range
     out_of_range_policy: ElectronTableOutOfRangePolicy = "clip"
     # Maximum difference between BOLSIG+ gas temperature and plasma_state.T_i.
     gas_temperature_tolerance_K: float = 5.0
@@ -566,17 +574,24 @@ class IonTransportConfig:
 
     # Positive ion transported by the single-ion fluid equation.
     positive_ion: str = "Ar+"
-    # Mobility source used by local_field_ion_kinetics.
+    # Mobility source used by local_field_ion_kinetics. Options:
+    # - "user_defined_equation": use the ion-mobility equation in physics.py
+    # - "swarm_data_table_interpolation": interpolate mobility_table_path
     mobility_source_mode: IonMobilitySourceMode = "user_defined_equation"
-    # Diffusion source used by local_field_ion_kinetics. The Einstein option
-    # computes D_i = mu_i*kB*T_i/e using the active mobility profile.
+    # Diffusion source used by local_field_ion_kinetics. Options:
+    # - "user_defined_equation": use the ion-diffusion equation in physics.py
+    # - "swarm_data_table_interpolation": interpolate diffusion_table_path
+    # - "einstein_relation": compute D_i = mu_i*kB*T_i/e using the active
+    #   mobility profile
     diffusion_source_mode: IonDiffusionSourceMode = "user_defined_equation"
     # Filenames or paths relative to the bundled ion_swarm_data directory. A
     # value is required for each selected table mode. Basenames are sufficient
     # for the bundled library because normalized table filenames are unique.
     mobility_table_path: str | None = None
     diffusion_table_path: str | None = None
-    # Local E/N behavior outside the selected dataset's range.
+    # Local E/N behavior outside the selected ion table's range. Options:
+    # - "clip": use the nearest endpoint value outside the table range
+    # - "error": stop the run when any requested E/N is outside the range
     out_of_range_policy: IonTableOutOfRangePolicy = "clip"
     # Maximum accepted difference between table Tgas and plasma_state.T_i.
     gas_temperature_tolerance_K: float = 5.0
@@ -602,9 +617,12 @@ class IonTransportConfig:
 class WaveformConfig:
     """Applied-voltage waveform settings."""
 
-    # Waveform type and parameters.
-    # waveform_type options: "step", "gaussian", "dc", "rf",
-    # "table", "tabulated", "measured_table".
+    # Waveform type. Options:
+    # - "step": rectangular on/off pulse
+    # - "gaussian": Gaussian pulse
+    # - "dc": constant voltage
+    # - "rf": sinusoidal voltage
+    # - "table", "tabulated", or "measured_table": file interpolation
     waveform_type: VoltageWaveform = "step"
     # Peak/drive amplitude [V] (interpretation depends on waveform_type).
     V_peak: float = 231.0
@@ -658,10 +676,17 @@ class WaveformConfig:
 class BoundaryConfig:
     """Boundary-condition and volumetric source toggles."""
 
-    # Species boundary mode per electrode side.
+    # Species boundary mode used by each of the four fields below. Options:
+    # - "zero_density": impose zero density at the boundary node
+    # - "electron_emission": use the emission-aware electron closure
+    # - "implicit_drift_closure": infer density from the drift-flux closure
+    # Options: "zero_density", "electron_emission", "implicit_drift_closure".
     anode_ion_boundary: BoundaryMode = "zero_density"
+    # Options: "zero_density", "electron_emission", "implicit_drift_closure".
     anode_electron_boundary: BoundaryMode = "implicit_drift_closure"
+    # Options: "zero_density", "electron_emission", "implicit_drift_closure".
     cathode_ion_boundary: BoundaryMode = "implicit_drift_closure"
+    # Options: "zero_density", "electron_emission", "implicit_drift_closure".
     cathode_electron_boundary: BoundaryMode = "electron_emission"
 
     # Volumetric source toggles used in continuity equations.
@@ -760,7 +785,13 @@ class CircuitConfig:
     #   neutral values: R0=0, C_s=np.inf, L_s=0, C_p=0, L_p=np.inf, R_m=0,
     #   and C_ext=0.
 
+    # Circuit topology options: "dielectric_plasma", "R0_Cp", "R0_Cp_Rm",
+    # "R0_Rm_Cext", "R0_Cs_Cp", "R0_Cs_Cp_Rm", "R0_Cs_Ls_Cp",
+    # "R0_Cs_Ls_Cp_Rm", "R0_Cs_Ls_Cp_Lp", and
+    # "R0_Cs_Ls_Cp_Lp_Rm_Cext". See the diagrams above for element layout.
     circuit_type: CircuitType = "R0_Rm_Cext"
+    # Circuit time-integration options: "explicit_euler", "implicit_euler",
+    # and "mna". See the backend descriptions above.
     circuit_time_scheme: CircuitTimeScheme = "explicit_euler"
     # Source-side effective resistance [ohm].  In the default reduced-source
     # example this lumps the HV pulser plus source-side cable/feedthrough sag.
@@ -845,6 +876,9 @@ class EmissionConfig:
 
     # External-emission controls.
     enable_external_emission: bool = True
+    # Electrode material parameter mode. Options:
+    # - "shared": use the shared_* parameters for both electrodes
+    # - "separate": use the anode_* and cathode_* parameters independently
     electrode_material_mode: ElectrodeMaterialMode = "shared"
     enable_anode_external_emission: bool = False
     enable_cathode_external_emission: bool = True
@@ -1028,6 +1062,11 @@ class TemporalDiagnosticsConfig:
     """
 
     enabled: bool = True
+    # Temporal quantity options: "V_app", "V_node", "V_source", "V_gap",
+    # "I_discharge", "I_transport_plasma", "I_transport_circuit",
+    # "I_emission_circuit", "I_emission_area", "I_displacement_gap", "cfl",
+    # "picard_iterations", "adaptive_substeps", "adaptive_dt_sub",
+    # "adaptive_cfl_est", and "particle_inventory".
     quantities: tuple[TemporalDiagnosticQuantity, ...] = (
         "V_app",
         "V_node",
@@ -1070,11 +1109,14 @@ class SpatialDiagnosticsConfig:
     """
 
     enabled: bool = True
+    # Spatial quantity options: "ne", "ni", "phi", "E", "Gamma_i",
+    # "Gamma_e", "townsend_alpha", "nu_i", "S_ion", "S", "mu_e", "D_e",
+    # "mu_i", and "D_i".
     quantities: tuple[SpatialDiagnosticQuantity, ...] = ("ne", "E")
     plot_groups: tuple[tuple[SpatialDiagnosticQuantity, ...], ...] | None = None
     # Tuple of sample times [s]. For a single item, use trailing comma: (0.5e-6,).
     t_samples: tuple[float, ...] | None = None
-    # Unit used for x-axis in plots.
+    # Unit used for the plot x-axis. Options: "m", "cm", and "mm".
     x_unit: Literal["m", "cm", "mm"] = "cm"
     # Optional prefix for saving figures to files.
     savepath_prefix: str | None = None
@@ -1102,8 +1144,14 @@ class AveragedSpatialDiagnosticsConfig:
     """
 
     enabled: bool = False
+    # Spatial quantity options: "ne", "ni", "phi", "E", "Gamma_i",
+    # "Gamma_e", "townsend_alpha", "nu_i", "S_ion", "S", "mu_e", "D_e",
+    # "mu_i", and "D_i".
     quantities: tuple[SpatialDiagnosticQuantity, ...] = ("ne", "ni", "phi", "E")
     plot_groups: tuple[tuple[SpatialDiagnosticQuantity, ...], ...] | None = None
+    # Averaging mode options:
+    # - "time_window": average over [t_avg_start, t_avg_end]
+    # - "last_n_cycles": average over the last N_cycle_avg RF cycles
     mode: AveragedSpatialMode = "time_window"
     # Used by mode="time_window". None -> full saved range.
     t_avg_start: float | None = None
@@ -1111,6 +1159,7 @@ class AveragedSpatialDiagnosticsConfig:
     t_avg_end: float | None = None
     # Used by mode="last_n_cycles". Must be > 0.
     N_cycle_avg: int = 1
+    # Unit used for the plot x-axis. Options: "m", "cm", and "mm".
     x_unit: Literal["m", "cm", "mm"] = "cm"
     savepath_prefix: str | None = None
 

@@ -65,6 +65,7 @@ Configuration and case loading:
 - `config_case_argon_dc_discharge.py`
 - `config_case_nitrogen_pulsed_discharge.py`
 - `config_case_deuterium_pulsed_discharge.py`
+- `config_case_helium_photoemission_discharge.py`
 
 User notebooks:
 
@@ -110,9 +111,11 @@ Validation report:
    - `diagnostics_spatial_snapshots.ipynb`
    - `diagnostics_spatial_averages.ipynb`
 
-`config.py` is the single canonical configuration model and guided reference.
-Case files are small subclasses that contain only their case-specific values;
-they do not duplicate dataclass definitions.
+`config.py` and every supplied `config_case_*.py` file carry the complete
+guided configuration structure. Each case file is standalone: its dataclass
+defaults are already tuned for that case, so a user can inspect and edit every
+available knob without following an inheritance chain. Automated tests require
+all configuration modules to retain the same dataclass field schema.
 
 ## Configuration Structure
 
@@ -271,6 +274,10 @@ SHA-256 file under `dist/`. It contains code, notebooks, tests, and both swarm
 libraries while excluding generated results and caches. See `CHANGELOG.md`,
 `CITATION.cff`, `THIRD_PARTY_NOTICES.md`, and `PRODUCTION_REGRESSION.md` for
 release, source, and full-resolution recovery details.
+
+`tools/build_release_wheel.py` produces a deterministic installable wheel and
+SHA-256 file under `dist/`. The wheel includes both authenticated swarm-data
+libraries, so table-driven cases remain self-contained after installation.
 
 ## License and Citation
 

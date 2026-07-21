@@ -56,9 +56,8 @@ state = run_simulation(cfg)
 ```
 
 `config_loader.py` imports the selected case normally. It does not rename a
-file or replace the canonical `config` module. Solver modules continue to use
-the dataclasses defined in `config.py`, while the selected case supplies a
-subclass containing only case-specific overrides.
+file or replace another module. Every supplied case file independently defines
+the same complete dataclass structure, with defaults tuned to that case.
 
 Results are written to the directory named by `cfg.run.run_name`.
 
@@ -66,8 +65,9 @@ Results are written to the directory named by `cfg.run.run_name`.
 
 The current case modules are:
 
-- `config` — canonical dataclasses and the default argon photoemission case;
-- `config_case_argon_photoemission_discharge` — explicit default-case wrapper;
+- `config` — generic guided configuration with argon photoemission defaults;
+- `config_case_argon_photoemission_discharge` — standalone argon
+  photoemission configuration;
 - `config_case_argon_dc_discharge` — argon DC glow-discharge case;
 - `config_case_nitrogen_pulsed_discharge` — nitrogen pulsed-discharge case;
 - `config_case_deuterium_pulsed_discharge` — D2 pulsed discharge using BOLSIG+
@@ -78,10 +78,10 @@ The current case modules are:
 Use a unique `run_name` whenever parameters change. Reusing a populated output
 directory can mix or overwrite results from different cases.
 
-## 4. Canonical Configuration Model
+## 4. Standalone Configuration Modules
 
-`config.py` is the only file that defines the public dataclasses. A
-`SimulationConfig` contains these 18 blocks:
+`config.py` and every `config_case_*.py` file define the full public dataclass
+structure. Each standalone `SimulationConfig` contains these 18 blocks:
 
 1. `run`
 2. `numerics`
@@ -107,22 +107,17 @@ Use grouped paths such as `cfg.geometry.L`, `cfg.plasma_state.p_Torr`,
 
 ### Create a New Case
 
-Do not copy the dataclass definitions. Subclass the canonical configuration
-or the closest existing case:
+Copy the complete generic configuration or the closest complete case, then
+edit the dataclass defaults directly. For example:
 
-```python
-"""Example custom case."""
-
-from config import SimulationConfig as _BaseSimulationConfig
-
-
-class SimulationConfig(_BaseSimulationConfig):
-    def __init__(self) -> None:
-        super().__init__()
-        self.run.run_name = "my_new_case"
-        self.plasma_state.p_Torr = 2.0
-        self.waveform.V_peak = 500.0
+```bash
+cp config.py config_case_my_new_case.py
 ```
+
+In the copied file, change `RunConfig.run_name`,
+`PlasmaStateConfig.p_Torr`, `WaveformConfig.V_peak`, and any other desired
+defaults. Keep the complete type aliases and dataclass field structure intact;
+the configuration-schema regression test checks parity across supplied cases.
 
 Save this as a Python module beside the other configuration files, then use
 its filename without `.py` as `CONFIG_MODULE`.
