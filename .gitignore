@@ -227,3 +227,8 @@ manuscript_*.txt
 # Release artifacts and preserved production-run archive
 PASCHEN-1D-main/dist/
 PASCHEN-1D-production-results-*/
+
+# Third-party downloads are local-only. BOLSIG+ prohibits third-party
+# redistribution, and LXCat source exports must be obtained by each user.
+bolsigplus*/
+PASCHEN-1D-main/ion_swarm_data/raw_lxcat/

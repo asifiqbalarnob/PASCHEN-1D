@@ -21,6 +21,7 @@ EXCLUDED_PARTS = {
     "__pycache__",
     "build",
     "dist",
+    "raw_lxcat",
 }
 
 

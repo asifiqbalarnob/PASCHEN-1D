@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 import sys
@@ -14,6 +15,17 @@ from ion_transport import load_ion_transport_table, sha256_file
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--require-raw-sources",
+        action="store_true",
+        help=(
+            "also require and authenticate the locally downloaded raw LXCat "
+            "archive (raw source files are intentionally not distributed)"
+        ),
+    )
+    args = parser.parse_args()
+
     project = PROJECT_ROOT
     electron_root = project / "electron_swarm_data"
     electron_manifest = json.loads((electron_root / "manifest.json").read_text())
@@ -53,16 +65,28 @@ def main() -> None:
         for record in ion_manifest["records"]
         if record.get("source_file") and record.get("source_file_sha256")
     }
-    for relative, expected_sha256 in sorted(raw_sources):
-        path = ion_root / relative
-        if sha256_file(path) != expected_sha256:
-            raise ValueError(f"Raw LXCat source checksum mismatch: {path}")
+    raw_archive = ion_root / str(ion_manifest["raw_archive"])
+    authenticated_raw_count = 0
+    if raw_archive.exists():
+        for relative, expected_sha256 in sorted(raw_sources):
+            path = ion_root / relative
+            if not path.is_file():
+                raise FileNotFoundError(f"Raw LXCat source is missing: {path}")
+            if sha256_file(path) != expected_sha256:
+                raise ValueError(f"Raw LXCat source checksum mismatch: {path}")
+            authenticated_raw_count += 1
+    elif args.require_raw_sources:
+        raise FileNotFoundError(
+            "The raw LXCat archive is not present. Download it locally with "
+            "tools/download_lxcat_ion_data.py before using --require-raw-sources."
+        )
 
     print(
         f"Authenticated {len(electron_records)} electron tables, "
         f"{len(normalized_records)} normalized ion tables, "
         f"{len(ion_manifest['compatible_mobility_diffusion_pairs'])} compatible pairs, "
-        f"and {len(raw_sources)} preserved raw ion exports."
+        f"and {authenticated_raw_count} locally present raw ion exports. "
+        f"The manifest records {len(raw_sources)} raw-source checksums."
     )
 
 

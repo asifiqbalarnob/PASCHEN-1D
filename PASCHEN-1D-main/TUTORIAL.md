@@ -297,10 +297,11 @@ assumption, not a replacement for measured diffusion data in every regime.
 
 ### Normalized LXCat Tables
 
-The ion archive has two layers:
+The ion-data workflow has two layers:
 
-- `ion_swarm_data/raw_lxcat/lxcat_ion_swarm_2026-07-21/` preserves the LXCat
-  exports, catalog, URLs, and checksums;
+- `ion_swarm_data/raw_lxcat/lxcat_ion_swarm_2026-07-21/` is a local,
+  Git-ignored workspace created by the downloader for LXCat exports, catalog,
+  URLs, and checksums; it is not distributed with PASCHEN-1D;
 - `ion_swarm_data/normalized_lxcat_2026-07-21/` contains solver-ready CSV files
   and `manifest.json`.
 
@@ -655,16 +656,19 @@ Use:
   adaptive limits, and perform a convergence study.
 - **Overwritten/mixed output:** assign a unique `run.run_name` for every case.
 
-## 16. Rebuilding the Ion Archive
+## 16. Rebuilding the Ion Tables
 
-The checked-in archive is ready to use. To reproduce it from LXCat:
+The checked-in normalized tables are ready to use. To reproduce them from
+LXCat, first review and accept the current LXCat terms, then run:
 
 ```bash
 python tools/download_lxcat_ion_data.py
 python tools/normalize_lxcat_ion_data.py
 ```
 
-The first command preserves the source material and retrieval metadata. The
-second creates self-describing solver tables and a manifest without averaging
-or splicing independent datasets. Review source-export failures and rejected
-records in the regenerated manifest before changing production selections.
+The first command downloads source material and retrieval metadata into the
+local, Git-ignored `ion_swarm_data/raw_lxcat/` directory. The second creates
+self-describing solver tables and a manifest without averaging or splicing
+independent datasets. Raw LXCat downloads must not be committed or included in
+a release. Review source-export failures and rejected records in the regenerated
+manifest before changing production selections.

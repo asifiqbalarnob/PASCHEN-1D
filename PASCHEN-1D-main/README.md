@@ -80,10 +80,14 @@ Diagnostics helpers:
 - `diagnostics_plotting.py`
 - `derived_diagnostics.py`
 
-Bundled swarm-data examples:
+Bundled swarm-data libraries:
 
 - `electron_swarm_data/lxcat_2026-07-20/` (electron tables)
-- `ion_swarm_data/` (preserved raw LXCat ion exports, normalized tables, and manifest)
+- `ion_swarm_data/` (normalized ion tables and provenance manifest)
+
+The BOLSIG+ executable and verbatim LXCat downloads are intentionally excluded
+from this repository. Obtain BOLSIG+ from its official website and use the
+provided download tool when raw LXCat source material is needed locally.
 
 Swarm-table values in configuration files are portable filenames or paths
 relative to these two data roots. PASCHEN-1D locates a unique basename
@@ -200,15 +204,18 @@ citations, raw source checksums, gas temperature, and ion/neutral identities.
 
 ## LXCat Ion Transport Workflow
 
-The raw acquisition and normalization steps are reproducible:
+The raw acquisition and normalization steps are reproducible. The downloader
+requires the user to accept and comply with the current LXCat terms:
 
 ```bash
 python tools/download_lxcat_ion_data.py
 python tools/normalize_lxcat_ion_data.py
 ```
 
-Raw LXCat files are preserved verbatim. Normalization never averages or splices
-independent measurements. Select a mobility and diffusion pair from
+Raw LXCat files are preserved only in the local, Git-ignored
+`ion_swarm_data/raw_lxcat/` directory and are not part of PASCHEN-1D releases.
+Normalization never averages or splices independent measurements. Select a
+mobility and diffusion pair from
 `ion_swarm_data/normalized_lxcat_2026-07-21/manifest.json`, then configure:
 
 ```python
@@ -262,6 +269,10 @@ python -m pytest -q
 python tools/build_electron_manifest.py --check
 python tools/audit_swarm_data.py
 ```
+
+If you have downloaded the raw LXCat archive locally, authenticate it against
+the recorded source checksums with
+`python tools/audit_swarm_data.py --require-raw-sources`.
 
 The command-line runner is also available:
 

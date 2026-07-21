@@ -1,10 +1,11 @@
 # Ion swarm data
 
-This directory separates source preservation from solver-ready data.
+This directory separates local source acquisition from solver-ready data.
 
-- `raw_lxcat/lxcat_ion_swarm_2026-07-21/` contains the verbatim ASCII exports,
-  LXCat output HTML, per-batch URLs/checksums, the contributor catalog, and the
-  deterministic download plan.
+- `raw_lxcat/lxcat_ion_swarm_2026-07-21/` is a local, Git-ignored workspace for
+  verbatim ASCII exports, LXCat output HTML, per-batch URLs/checksums, the
+  contributor catalog, and the deterministic download plan. It is not
+  distributed with PASCHEN-1D.
 - `normalized_lxcat_2026-07-21/manifest.json` indexes every raw process and
   identifies every normalized mobility/diffusion table. Candidate tables with
   non-positive values, duplicate E/N coordinates, or fewer than two points are
@@ -19,6 +20,9 @@ Regenerate the archive and normalized layer with:
 python tools/download_lxcat_ion_data.py
 python tools/normalize_lxcat_ion_data.py
 ```
+
+Before downloading, review and accept the current LXCat terms. Do not commit
+the resulting `raw_lxcat/` directory or include it in a release.
 
 ## Reduced-coefficient conversion
 

@@ -109,6 +109,16 @@ class ReleaseValidationTests(unittest.TestCase):
             generated.write_text("generated\n", encoding="utf-8")
             self.assertEqual(included_files(root), [source])
 
+    def test_release_archive_excludes_raw_lxcat_downloads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "keep.py"
+            source.write_text("pass\n", encoding="utf-8")
+            raw = root / "ion_swarm_data" / "raw_lxcat" / "export.txt"
+            raw.parent.mkdir(parents=True)
+            raw.write_text("third-party source data\n", encoding="utf-8")
+            self.assertEqual(included_files(root), [source])
+
     def test_modified_bundled_ion_table_fails_manifest_checksum(self) -> None:
         normalized = data_paths.ION_SWARM_DATA_DIR / "normalized_lxcat_2026-07-21"
         manifest = json.loads((normalized / "manifest.json").read_text())

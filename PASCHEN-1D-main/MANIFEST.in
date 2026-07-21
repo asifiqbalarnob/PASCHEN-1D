@@ -3,6 +3,7 @@ include requirements.txt requirements-runtime.lock requirements-dev.lock environ
 include *.ipynb
 recursive-include electron_swarm_data *
 recursive-include ion_swarm_data *
+prune ion_swarm_data/raw_lxcat
 recursive-include tests *.py *.json
 recursive-include tools *.py
 prune __pycache__
