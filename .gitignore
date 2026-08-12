@@ -182,9 +182,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
@@ -224,11 +224,5 @@ postprocess_figures/
 # Local manuscript / analysis artifacts
 manuscript_*.txt
 
-# Release artifacts and preserved production-run archive
-PASCHEN-1D-main/dist/
-PASCHEN-1D-production-results-*/
-
-# Third-party downloads are local-only. BOLSIG+ prohibits third-party
-# redistribution, and LXCat source exports must be obtained by each user.
-bolsigplus*/
-PASCHEN-1D-main/ion_swarm_data/raw_lxcat/
+# Third-party source data downloaded locally for table regeneration.
+ion_swarm_data/raw_lxcat/
