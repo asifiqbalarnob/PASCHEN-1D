@@ -9,14 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: PASCHEN-1D-main
+        
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: PASCHEN-1D-main/requirements-dev.lock
+          cache-dependency-path: requirements-dev.lock
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements-dev.lock
       - run: python -m compileall -q *.py tools tests
