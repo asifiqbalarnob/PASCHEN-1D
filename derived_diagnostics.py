@@ -40,10 +40,12 @@ TemporalQuantity = Literal[
     "I_emission_area",
     "I_displacement_gap",
     "cfl",
+    "diffusion_cfl",
     "picard_iterations",
     "adaptive_substeps",
     "adaptive_dt_sub",
     "adaptive_cfl_est",
+    "adaptive_diffusion_cfl_est",
     "particle_inventory",
 ]
 SpatialQuantity = Literal[
@@ -850,9 +852,10 @@ def replot_from_saved(
                 "I_displacement_gap",
             ),
             ("I_emission_area",),
-            ("cfl",),
+            ("cfl", "diffusion_cfl"),
             ("picard_iterations",),
             ("adaptive_substeps",),
+            ("adaptive_cfl_est", "adaptive_diffusion_cfl_est"),
             ("particle_inventory",),
         )
 
@@ -871,10 +874,16 @@ def replot_from_saved(
         )[:Nt_valid],
         "cfl": np.asarray(_read_time_series(run_dir, "c_cfl_mm.dat", Nt), dtype=np.float64)[:Nt_valid],
     }
+    diffusion_cfl_path = run_dir / "diffusion_cfl_mm.dat"
     adaptive_substeps_path = run_dir / "adaptive_substeps_mm.dat"
     adaptive_dt_sub_path = run_dir / "adaptive_dt_sub_mm.dat"
     adaptive_cfl_est_path = run_dir / "adaptive_cfl_est_mm.dat"
+    adaptive_diffusion_cfl_est_path = run_dir / "adaptive_diffusion_cfl_est_mm.dat"
     picard_iterations_path = run_dir / "picard_iterations_mm.dat"
+    if diffusion_cfl_path.exists():
+        temporal_values["diffusion_cfl"] = np.asarray(
+            _read_time_series(run_dir, "diffusion_cfl_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
     if adaptive_substeps_path.exists():
         temporal_values["adaptive_substeps"] = np.asarray(
             _read_time_series(run_dir, "adaptive_substeps_mm.dat", Nt), dtype=np.float64
@@ -886,6 +895,10 @@ def replot_from_saved(
     if adaptive_cfl_est_path.exists():
         temporal_values["adaptive_cfl_est"] = np.asarray(
             _read_time_series(run_dir, "adaptive_cfl_est_mm.dat", Nt), dtype=np.float64
+        )[:Nt_valid]
+    if adaptive_diffusion_cfl_est_path.exists():
+        temporal_values["adaptive_diffusion_cfl_est"] = np.asarray(
+            _read_time_series(run_dir, "adaptive_diffusion_cfl_est_mm.dat", Nt), dtype=np.float64
         )[:Nt_valid]
     if picard_iterations_path.exists():
         temporal_values["picard_iterations"] = np.asarray(
@@ -977,11 +990,17 @@ def replot_from_saved(
             elif q == "adaptive_dt_sub":
                 ylab = "Substep dt [s]"
             elif q == "adaptive_cfl_est":
-                ylab = "Estimated macro CFL"
+                ylab = "Estimated macro drift CFL"
+            elif q == "adaptive_diffusion_cfl_est":
+                ylab = "Estimated macro diffusion stability"
+            elif q == "cfl":
+                ylab = "Drift CFL number"
+            elif q == "diffusion_cfl":
+                ylab = "Diffusion stability number"
             elif q == "picard_iterations":
                 ylab = "Picard iterations per macro step"
             else:
-                ylab = "CFL number"
+                ylab = "Value"
             if ylabel is None:
                 ylabel = ylab
             elif ylabel != ylab:

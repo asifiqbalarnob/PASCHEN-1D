@@ -172,10 +172,12 @@ TemporalDiagnosticQuantity = Literal[
     "I_emission_area",
     "I_displacement_gap",
     "cfl",
+    "diffusion_cfl",
     "picard_iterations",
     "adaptive_substeps",
     "adaptive_dt_sub",
     "adaptive_cfl_est",
+    "adaptive_diffusion_cfl_est",
     "particle_inventory",
 ]
 
@@ -259,9 +261,9 @@ class RunConfig:
 #
 # **Stability note**
 #
-# Drift-diffusion plasma simulations can be stiff. If a run warns about CFL
-# violation or adaptive substep overflow, reduce `dt` by increasing `Nt`, or
-# lower `target_cfl_substep`, or increase `max_substeps` cautiously.
+# Drift-diffusion plasma simulations can be stiff. If a run warns about drift
+# or diffusion stability violation, reduce `dt` by increasing `Nt`, lower the
+# corresponding adaptive-substep target, or increase `max_substeps` cautiously.
 
 # %%
 @dataclass
@@ -287,11 +289,16 @@ class NumericsConfig:
     numba_parallel: bool = False
 
     # Enable adaptive substepping inside each macro time step.
-    # When enabled, each macro step dt is split into n_sub substeps so the
-    # estimated drift CFL per substep is kept near/below target_cfl_substep.
+    # When enabled, each macro step dt is split into n_sub transport substeps
+    # so both explicit stability diagnostics are kept near/below their targets:
+    #   drift metric     = max(|mu_e E|, |mu_i E|) * dt_sub / dx
+    #   diffusion metric = max(D_e, D_i) * dt_sub / dx^2
     use_adaptive_substepping: bool = True
     # Target drift CFL for each substep when adaptive substepping is enabled.
     target_cfl_substep: float = 0.5
+    # Target explicit-diffusion stability number for each adaptive substep.
+    # A value below 0.5 is conservative for explicit central-difference diffusion.
+    target_diffusion_cfl_substep: float = 0.45
     # Hard cap on the number of substeps allowed per macro step.
     max_substeps: int = 16
     # Behavior when required substeps exceed max_substeps. Options:
@@ -1045,8 +1052,9 @@ class OutputConfig:
 #
 # Time-history diagnostics saved or plotted after the run.
 #
-# Common quantities include voltages, discharge-current decompositions, CFL
-# history, Picard iterations, adaptive-substep history, and particle inventory.
+# Common quantities include voltages, discharge-current decompositions, drift
+# and diffusion stability histories, Picard iterations, adaptive-substep
+# history, and particle inventory.
 # Use `plot_groups` when same-nature quantities should be overlaid, such as
 # `("V_app", "V_gap")` or current-decomposition terms.
 
@@ -1065,8 +1073,9 @@ class TemporalDiagnosticsConfig:
     # Temporal quantity options: "V_app", "V_node", "V_source", "V_gap",
     # "I_discharge", "I_transport_plasma", "I_transport_circuit",
     # "I_emission_circuit", "I_emission_area", "I_displacement_gap", "cfl",
-    # "picard_iterations", "adaptive_substeps", "adaptive_dt_sub",
-    # "adaptive_cfl_est", and "particle_inventory".
+    # "diffusion_cfl", "picard_iterations", "adaptive_substeps",
+    # "adaptive_dt_sub", "adaptive_cfl_est",
+    # "adaptive_diffusion_cfl_est", and "particle_inventory".
     quantities: tuple[TemporalDiagnosticQuantity, ...] = (
         "V_app",
         "V_node",
@@ -1077,6 +1086,7 @@ class TemporalDiagnosticsConfig:
         "I_emission_area",
         "I_displacement_gap",
         "cfl",
+        "diffusion_cfl",
         "particle_inventory",
     )
     plot_groups: tuple[tuple[TemporalDiagnosticQuantity, ...], ...] | None = None
@@ -1278,6 +1288,7 @@ class SimulationState:
     V_gap: np.ndarray
     I_discharge: np.ndarray
     c_cfl: np.ndarray
+    diffusion_cfl: np.ndarray
     ne_final: np.ndarray
     ni_final: np.ndarray
     phi_final: np.ndarray
@@ -1297,6 +1308,7 @@ class SimulationState:
     adaptive_substeps: np.ndarray | None = None
     adaptive_dt_sub: np.ndarray | None = None
     adaptive_cfl_est: np.ndarray | None = None
+    adaptive_diffusion_cfl_est: np.ndarray | None = None
 
 # %%
 @dataclass

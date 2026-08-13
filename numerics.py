@@ -10,7 +10,7 @@ Included components:
 4) RK4 density update wrapper.
 5) Reusable linear KT+RK4 workspaces (low-allocation hot path).
 6) Boundary-condition helpers for electron/ion densities.
-7) Drift-based CFL diagnostic.
+7) Drift- and diffusion-based explicit-stability diagnostics.
 
 All routines assume a uniform 1D spatial grid.
 """
@@ -941,6 +941,37 @@ def compute_drift_cfl(
     a_i = np.abs(mu_i * E)
     a_max = max(float(np.max(a_e)), float(np.max(a_i)))
     return float(a_max * dt / dx)
+
+
+def compute_diffusion_cfl(
+    D_e: float | np.ndarray,
+    D_i: float | np.ndarray,
+    dt: float,
+    dx: float,
+) -> float:
+    """
+    Return the explicit-diffusion stability number without side effects.
+
+    The KT/RK4 density update treats diffusion explicitly. A useful parabolic
+    stability diagnostic is therefore
+
+        C_D = D_max * dt / dx^2,
+
+    where
+
+        D_max = max_x max(|D_e|, |D_i|).
+
+    For simple explicit central-difference diffusion, values near or below
+    0.5 are typically expected. PASCHEN-1D exposes the exact target through
+    ``cfg.numerics.target_diffusion_cfl_substep`` so users can choose a more
+    conservative value when needed.
+    """
+    D_e_arr = np.asarray(D_e)
+    D_i_arr = np.asarray(D_i)
+    D_e_abs = np.abs(D_e_arr)
+    D_i_abs = np.abs(D_i_arr)
+    D_max = max(float(np.max(D_e_abs)), float(np.max(D_i_abs)))
+    return float(D_max * dt / (dx * dx))
 
 
 def CFL_test(

@@ -32,10 +32,12 @@ TEMPORAL_FILES = {
     "I_emission_area": "I_emission_area_mm.dat",
     "I_displacement_gap": "I_displacement_gap_mm.dat",
     "cfl": "c_cfl_mm.dat",
+    "diffusion_cfl": "diffusion_cfl_mm.dat",
     "picard_iterations": "picard_iterations_mm.dat",
     "adaptive_substeps": "adaptive_substeps_mm.dat",
     "adaptive_dt_sub": "adaptive_dt_sub_mm.dat",
     "adaptive_cfl_est": "adaptive_cfl_est_mm.dat",
+    "adaptive_diffusion_cfl_est": "adaptive_diffusion_cfl_est_mm.dat",
 }
 
 SPATIAL_FILES = {

@@ -463,6 +463,25 @@ if NUMBA_AVAILABLE:
         return a_max * dt / dx
 
 
+    @njit(cache=True)
+    def _compute_diffusion_cfl_numba(
+        D_e: np.ndarray,
+        D_i: np.ndarray,
+        dt: float,
+        dx: float,
+    ) -> float:
+        D_max = 0.0
+        Nx = D_e.shape[0]
+        for i in range(Nx):
+            D_e_abs = abs(D_e[i])
+            if D_e_abs > D_max:
+                D_max = D_e_abs
+            D_i_abs = abs(D_i[i])
+            if D_i_abs > D_max:
+                D_max = D_i_abs
+        return D_max * dt / (dx * dx)
+
+
 def rk4_step_linear_numba_reuse(
     n: np.ndarray,
     u: np.ndarray,
@@ -546,6 +565,27 @@ def compute_drift_cfl_numba(
             mu_e,
             mu_i,
             E,
+            float(dt),
+            float(dx),
+        )
+    )
+
+
+def compute_diffusion_cfl_numba(
+    D_e: np.ndarray,
+    D_i: np.ndarray,
+    dt: float,
+    dx: float,
+) -> float:
+    """
+    Numba-accelerated explicit-diffusion stability diagnostic.
+    """
+    if not NUMBA_AVAILABLE:
+        raise RuntimeError("Numba backend requested but numba is not available.")
+    return float(
+        _compute_diffusion_cfl_numba(
+            D_e,
+            D_i,
             float(dt),
             float(dx),
         )

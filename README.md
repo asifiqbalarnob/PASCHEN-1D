@@ -28,6 +28,8 @@ explicit Einstein-relation diffusion closure.
 
 - 1D electron/ion continuity with Kurganov-Tadmor fluxes and slope limiting.
 - Self-consistent Poisson solve with emission/sheath boundary iteration.
+- Drift-CFL and explicit-diffusion stability monitoring, with optional
+  adaptive substepping controlled from the configuration file.
 - Surface-emission coupling through boundary-face electron fluxes.
 - Secondary, thermionic, field, Richardson-Dushman, constant-current-density,
   and quantum-pulse photoemission models.
@@ -190,8 +192,8 @@ optional grouped-plot controls.
 Available diagnostics include:
 
 - temporal circuit/plasma quantities such as `V_app`, `V_node`, `V_gap`,
-  `I_discharge`, current components, CFL, Picard iterations, and particle
-  inventory;
+  `I_discharge`, current components, drift-CFL and diffusion-stability
+  diagnostics, Picard iterations, and particle inventory;
 - spatial snapshots of `ne`, `ni`, `phi`, `E`, fluxes, ionization quantities,
   mobilities/diffusivities, and source terms;
 - time-window or cycle-averaged spatial profiles;

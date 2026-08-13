@@ -10,8 +10,8 @@ This module handles:
    - Species densities (n_e, n_i)
    - Optional diagnostics (Gamma_i, Gamma_e, townsend_alpha, nu_i, S_ion, S,
      mu_e, D_e)
-   - Scalar time histories (V_gap, CFL, I_discharge, current decomposition)
-   - Adaptive-substepping time histories (substep count, dt_sub, CFL estimate)
+   - Scalar time histories (V_gap, drift/diffusion CFL, I_discharge, current decomposition)
+   - Adaptive-substepping time histories (substep count, dt_sub, drift/diffusion estimates)
 
 2. A small dataclass `OutputHandles` that collects references to all
    memmapped arrays so the main driver can pass them around easily.
@@ -130,7 +130,9 @@ class OutputHandles:
     V_gap : np.ndarray
         Time history of plasma gap voltage.
     c_cfl : np.ndarray
-        Time history of CFL diagnostic values.
+        Time history of realized drift-CFL diagnostic values.
+    diffusion_cfl : np.ndarray
+        Time history of realized explicit-diffusion stability diagnostic values.
     I_discharge : np.ndarray
         Time history of discharge current.
     I_transport_plasma : np.ndarray
@@ -156,6 +158,8 @@ class OutputHandles:
         Effective per-macro-step substep size [s].
     adaptive_cfl_est : np.ndarray
         Pre-substep drift-CFL estimate at macro-step start.
+    adaptive_diffusion_cfl_est : np.ndarray
+        Pre-substep diffusion-CFL estimate at macro-step start.
     """
     phi_sampled: np.ndarray
     E_sampled: np.ndarray
@@ -175,6 +179,7 @@ class OutputHandles:
     V_node: Optional[np.ndarray]
     V_source: Optional[np.ndarray]
     c_cfl: np.ndarray
+    diffusion_cfl: np.ndarray
     I_discharge: np.ndarray
     I_transport_plasma: np.ndarray
     I_transport_circuit: np.ndarray
@@ -185,6 +190,7 @@ class OutputHandles:
     adaptive_substeps: np.ndarray
     adaptive_dt_sub: np.ndarray
     adaptive_cfl_est: np.ndarray
+    adaptive_diffusion_cfl_est: np.ndarray
 
 # ============================================================
 # Low-level file creation helper
@@ -250,7 +256,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
          - phi, E, n_e, n_i       (always)
          - Gamma_i, Gamma_e, townsend_alpha, nu_i, S_ion, S, mu_e, D_e
            (if cfg.output.log_intermediate is True)
-         - V_gap, c_cfl, I_discharge, current decomposition
+         - V_gap, c_cfl, diffusion_cfl, I_discharge, current decomposition
            (scalar time histories)
     4. Reopens those files in "readwrite" mode and wraps them in an
        OutputHandles dataclass.
@@ -309,6 +315,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     # --- Scalar time histories ---
     Vgap_path = outdir / "Vgap_mm.dat"
     c_cfl_path = outdir / "c_cfl_mm.dat"
+    diffusion_cfl_path = outdir / "diffusion_cfl_mm.dat"
     Idis_path = outdir / "Idischarge_mm.dat"
     Vnode_path = outdir / "Vnode_mm.dat"
     Vsource_path = outdir / "Vsource_mm.dat"
@@ -321,6 +328,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     adaptive_substeps_path = outdir / "adaptive_substeps_mm.dat"
     adaptive_dt_sub_path = outdir / "adaptive_dt_sub_mm.dat"
     adaptive_cfl_est_path = outdir / "adaptive_cfl_est_mm.dat"
+    adaptive_diffusion_cfl_est_path = outdir / "adaptive_diffusion_cfl_est_mm.dat"
     circuit_type = str(getattr(cfg.circuit, "circuit_type", ""))
     has_node_voltage = circuit_type in {
         "R0_Cp",
@@ -360,6 +368,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     if has_source_voltage:
         create_file(Vsource_path, (Nt,), dtype=SCALAR_HISTORY_DTYPE)
     create_file(c_cfl_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
+    create_file(diffusion_cfl_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
     create_file(Idis_path, (Nt,), dtype=SCALAR_HISTORY_DTYPE)
     create_file(I_transport_plasma_path, (Nt,), dtype=SCALAR_HISTORY_DTYPE)
     create_file(I_transport_circuit_path, (Nt,), dtype=SCALAR_HISTORY_DTYPE)
@@ -370,6 +379,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     create_file(adaptive_substeps_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
     create_file(adaptive_dt_sub_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
     create_file(adaptive_cfl_est_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
+    create_file(adaptive_diffusion_cfl_est_path, (Nt,), dtype=CONTROL_HISTORY_DTYPE)
 
     # --- Open memmaps ---
     phi_sampled = np.memmap(phi_path, mode="readwrite", dtype=SNAPSHOT_DTYPE, shape=(Nsave, Nx))
@@ -404,6 +414,9 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         else None
     )
     c_cfl = np.memmap(c_cfl_path, mode="readwrite", dtype=CONTROL_HISTORY_DTYPE, shape=(Nt,))
+    diffusion_cfl = np.memmap(
+        diffusion_cfl_path, mode="readwrite", dtype=CONTROL_HISTORY_DTYPE, shape=(Nt,)
+    )
     I_discharge = np.memmap(Idis_path, mode="readwrite", dtype=SCALAR_HISTORY_DTYPE, shape=(Nt,))
     I_transport_plasma = np.memmap(
         I_transport_plasma_path, mode="readwrite", dtype=SCALAR_HISTORY_DTYPE, shape=(Nt,)
@@ -432,6 +445,12 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
     adaptive_cfl_est = np.memmap(
         adaptive_cfl_est_path, mode="readwrite", dtype=CONTROL_HISTORY_DTYPE, shape=(Nt,)
     )
+    adaptive_diffusion_cfl_est = np.memmap(
+        adaptive_diffusion_cfl_est_path,
+        mode="readwrite",
+        dtype=CONTROL_HISTORY_DTYPE,
+        shape=(Nt,),
+    )
 
     return OutputHandles(
         phi_sampled=phi_sampled,
@@ -452,6 +471,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         V_node=V_node,
         V_source=V_source,
         c_cfl=c_cfl,
+        diffusion_cfl=diffusion_cfl,
         I_discharge=I_discharge,
         I_transport_plasma=I_transport_plasma,
         I_transport_circuit=I_transport_circuit,
@@ -462,6 +482,7 @@ def allocate_outputs(cfg: SimulationConfig, Nt: int, Nx: int) -> OutputHandles:
         adaptive_substeps=adaptive_substeps,
         adaptive_dt_sub=adaptive_dt_sub,
         adaptive_cfl_est=adaptive_cfl_est,
+        adaptive_diffusion_cfl_est=adaptive_diffusion_cfl_est,
     )
 
 
@@ -511,6 +532,7 @@ def write_run_metadata(
         "numba_parallel": bool(cfg.numerics.numba_parallel),
         "use_adaptive_substepping": bool(cfg.numerics.use_adaptive_substepping),
         "target_cfl_substep": float(cfg.numerics.target_cfl_substep),
+        "target_diffusion_cfl_substep": float(cfg.numerics.target_diffusion_cfl_substep),
         "max_substeps": int(cfg.numerics.max_substeps),
         "adaptive_substep_overflow_policy": str(cfg.numerics.adaptive_substep_overflow_policy),
         "adaptive_substep_warn_every": int(cfg.numerics.adaptive_substep_warn_every),

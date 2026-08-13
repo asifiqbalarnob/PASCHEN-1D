@@ -524,12 +524,14 @@ cfg.numerics.Nt = 1_000_000
 cfg.numerics.hotloop_backend = "numba"  # or "numpy"
 cfg.numerics.use_adaptive_substepping = True
 cfg.numerics.target_cfl_substep = 0.5
+cfg.numerics.target_diffusion_cfl_substep = 0.45
 cfg.numerics.max_substeps = 16
 ```
 
-Adaptive substepping splits a macro step to control drift CFL. If it repeatedly
-reaches `max_substeps`, increase `Nt` or revise the step controls rather than
-treating a capped warning as proof of convergence.
+Adaptive substepping splits each user-selected time step to control both the
+drift CFL and the explicit-diffusion stability number. If it repeatedly reaches
+`max_substeps`, increase `Nt` or revise the step controls rather than treating a
+capped warning as proof of convergence.
 
 ### Stage 1: Configuration and Table Validation
 
@@ -562,8 +564,9 @@ cfg.output.save_every = 100
 state = run_simulation(cfg)
 ```
 
-Check for finite densities, fields, currents, CFL history, and reasonable
-table-range use. A smoke run verifies plumbing and early-time stability; it
+Check for finite densities, fields, currents, drift/diffusion stability
+histories, and reasonable table-range use. A smoke run verifies plumbing and
+early-time stability; it
 does not validate a full pulse or steady discharge.
 
 ### Stage 3: Resolution and Full-Physics Runs
@@ -587,7 +590,8 @@ python -m pytest -q
 source arrays needed by many diagnostics.
 
 Common scalar histories include gap/source/node voltages, discharge-current
-components, CFL, Picard iterations, and adaptive-step statistics. Always-saved
+components, drift/diffusion stability diagnostics, Picard iterations, and
+adaptive-step statistics. Always-saved
 spatial fields include:
 
 - `ne`, `ni`;
@@ -652,8 +656,8 @@ Use:
   a user-defined closure. Switch that closure to a compatible table.
 - **Emission with the wrong boundary:** an external emission mechanism is
   enabled but the corresponding electron boundary is not `electron_emission`.
-- **CFL or adaptive overflow warnings:** reduce the macro time step, revisit
-  adaptive limits, and perform a convergence study.
+- **Drift-CFL, diffusion-stability, or adaptive overflow warnings:** reduce
+  the time step, revisit adaptive limits, and perform a convergence study.
 - **Overwritten/mixed output:** assign a unique `run.run_name` for every case.
 
 ## 16. Rebuilding the Ion Tables

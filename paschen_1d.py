@@ -10,7 +10,7 @@ This module orchestrates:
 - KT+RK4 continuity updates for n_e and n_i,
 - Poisson solve with Dirichlet boundaries (phi_left=V_gap, phi_right=0),
 - optional anode/cathode external emission models,
-- CFL diagnostics and snapshot output.
+- drift/diffusion stability diagnostics and snapshot output.
 
 Typical usage (from command line):
 
@@ -38,8 +38,8 @@ Run-flow map (quick onboarding):
 6. Advance external circuit (step_circuit) to obtain new V_gap.
 7. Build volumetric sources (Townsend ionization/recombination, optional toggles).
 8. Advance n_i and n_e with KT + RK4, then enforce BC + Poisson fixed-point.
-9. Apply optional adaptive substepping (if enabled), compute CFL diagnostics,
-   and write snapshots every cfg.output.save_every.
+9. Apply optional adaptive substepping (if enabled), compute drift/diffusion
+   stability diagnostics, and write snapshots every cfg.output.save_every.
 10. Return SimulationState; inspect saved outputs with the diagnostics notebooks
     or optional quick-look plotting in run_paschen_1d.ipynb.
 """
@@ -69,12 +69,14 @@ from numerics import (
     rk4_step_linear_reuse,
     set_boundary_condition_implicit,
     compute_drift_cfl,
+    compute_diffusion_cfl,
 )
 from numerics_jit import (
     is_numba_available,
     create_numba_linear_rk4_workspace,
     rk4_step_linear_numba_reuse,
     compute_drift_cfl_numba,
+    compute_diffusion_cfl_numba,
 )
 from circuit import step_circuit
 from circuit_implicit_euler import step_circuit_implicit_euler
@@ -360,6 +362,7 @@ def _print_run_config_summary(cfg: SimulationConfig, dt: float, dx: float) -> No
         f"numba_parallel={cfg.numerics.numba_parallel}, "
         f"adaptive_substepping={cfg.numerics.use_adaptive_substepping}, "
         f"target_cfl_substep={cfg.numerics.target_cfl_substep:.6g}, "
+        f"target_diffusion_cfl_substep={cfg.numerics.target_diffusion_cfl_substep:.6g}, "
         f"max_substeps={cfg.numerics.max_substeps}, "
         f"overflow_policy={cfg.numerics.adaptive_substep_overflow_policy}, "
         f"warn_every={cfg.numerics.adaptive_substep_warn_every}"
@@ -447,10 +450,13 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             - I_emission_circuit  : direct-emission residual diagnostic [A], shape (Nt,)
             - I_emission_area     : represented surface-emission current over 1D area [A], shape (Nt,)
             - I_displacement_gap  : gap displacement current [A], shape (Nt,)
-            - c_cfl         : CFL number history, shape (Nt,)
+            - c_cfl         : drift-CFL number history, shape (Nt,)
+            - diffusion_cfl : explicit diffusion stability-number history, shape (Nt,)
             - adaptive_substeps : adaptive substep count per macro step, shape (Nt,)
             - adaptive_dt_sub   : effective substep dt per macro step [s], shape (Nt,)
             - adaptive_cfl_est  : pre-step drift-CFL estimate (macro dt), shape (Nt,)
+            - adaptive_diffusion_cfl_est : pre-step diffusion stability estimate
+              using macro dt, shape (Nt,)
             - ne_final      : final electron density profile [m^-3], shape (Nx,)
             - ni_final      : final ion    density profile [m^-3], shape (Nx,)
             - phi_final     : final potential profile [V], shape (Nx,)
@@ -677,6 +683,8 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     adaptive_substeps = outputs.adaptive_substeps
     adaptive_dt_sub = outputs.adaptive_dt_sub
     adaptive_cfl_est = outputs.adaptive_cfl_est
+    diffusion_cfl = outputs.diffusion_cfl
+    adaptive_diffusion_cfl_est = outputs.adaptive_diffusion_cfl_est
 
     # Write run metadata so plots can be regenerated without rerunning simulation.
     write_run_metadata(
@@ -800,6 +808,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             )
 
         drift_cfl_func = compute_drift_cfl_numba
+        diffusion_cfl_func = compute_diffusion_cfl_numba
     else:
 
         def rk4_linear_step(
@@ -834,6 +843,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             )
 
         drift_cfl_func = compute_drift_cfl
+        diffusion_cfl_func = compute_diffusion_cfl
 
     mu_i_row[:] = build_ion_mobility_profile(
         cfg=cfg,
@@ -871,11 +881,19 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         dt=dt,
         dx=dx,
     )
+    diffusion_cfl_initial = diffusion_cfl_func(
+        D_e=D_e_row,
+        D_i=D_i_row,
+        dt=dt,
+        dx=dx,
+    )
     c_cfl[0] = cfl_initial
+    diffusion_cfl[0] = diffusion_cfl_initial
     picard_iterations[0] = 0.0
     adaptive_substeps[0] = 1.0
     adaptive_dt_sub[0] = dt
     adaptive_cfl_est[0] = cfl_initial
+    adaptive_diffusion_cfl_est[0] = diffusion_cfl_initial
 
     surface_Q_emit_external_signed = 0.0
     surface_Q_injected_external_signed = 0.0
@@ -976,6 +994,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     start = pytime.perf_counter()
     use_adaptive_substepping = bool(cfg.numerics.use_adaptive_substepping)
     target_cfl_substep = float(cfg.numerics.target_cfl_substep)
+    target_diffusion_cfl_substep = float(cfg.numerics.target_diffusion_cfl_substep)
     max_substeps = int(cfg.numerics.max_substeps)
     overflow_policy = cfg.numerics.adaptive_substep_overflow_policy
     warn_every = int(cfg.numerics.adaptive_substep_warn_every)
@@ -987,10 +1006,15 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     adaptive_total_substeps = 0
     adaptive_steps_with_split = 0
     adaptive_overflow_events = 0
+    adaptive_steps_limited_by_drift = 0
+    adaptive_steps_limited_by_diffusion = 0
+    adaptive_steps_limited_by_both = 0
     adaptive_max_required_substeps = 1
     adaptive_max_used_substeps = 1
     adaptive_max_pre_step_cfl = float(adaptive_cfl_est[0])
     adaptive_max_realized_substep_cfl = float(c_cfl[0])
+    adaptive_max_pre_step_diffusion_cfl = float(adaptive_diffusion_cfl_est[0])
+    adaptive_max_realized_substep_diffusion_cfl = float(diffusion_cfl[0])
     bc_poisson_picard_total_solves = 0
     bc_poisson_picard_total_iterations = 0
     bc_poisson_picard_max_iterations = 0
@@ -1006,6 +1030,14 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             neutral_density=neutral_density,
             interpolation_cache=swarm_interp_cache,
         ).astype(mu_i_row.dtype, copy=False)
+        D_i_row[:] = build_ion_diffusion_profile(
+            cfg=cfg,
+            x_array=x_array,
+            E_column=E_curr,
+            neutral_density=neutral_density,
+            ion_mobility=mu_i_row,
+            interpolation_cache=swarm_interp_cache,
+        ).astype(D_i_row.dtype, copy=False)
         update_electron_transport_profiles()
 
         cfl_est_macro = drift_cfl_func(
@@ -1015,42 +1047,85 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             dt=dt,
             dx=dx,
         )
-        if not np.isfinite(cfl_est_macro):
+        diffusion_cfl_est_macro = diffusion_cfl_func(
+            D_e=D_e_row,
+            D_i=D_i_row,
+            dt=dt,
+            dx=dx,
+        )
+        if not (np.isfinite(cfl_est_macro) and np.isfinite(diffusion_cfl_est_macro)):
             if use_adaptive_substepping and (overflow_policy == "error"):
                 raise RuntimeError(
-                    "Adaptive substepping encountered non-finite CFL estimate "
-                    f"at t={time[n_idx + 1]:.4e} s."
+                    "Adaptive substepping encountered a non-finite stability estimate "
+                    f"at t={time[n_idx + 1]:.4e} s: "
+                    f"drift_cfl={cfl_est_macro}, "
+                    f"diffusion_cfl={diffusion_cfl_est_macro}."
                 )
-            cfl_est_macro = np.inf
+            if not np.isfinite(cfl_est_macro):
+                cfl_est_macro = np.inf
+            if not np.isfinite(diffusion_cfl_est_macro):
+                diffusion_cfl_est_macro = np.inf
         adaptive_max_pre_step_cfl = max(adaptive_max_pre_step_cfl, cfl_est_macro)
+        adaptive_max_pre_step_diffusion_cfl = max(
+            adaptive_max_pre_step_diffusion_cfl, diffusion_cfl_est_macro
+        )
 
         if use_adaptive_substepping:
             if np.isfinite(cfl_est_macro):
-                n_sub_required = max(
+                drift_substeps_required = max(
                     1,
                     int(np.ceil(cfl_est_macro / max(target_cfl_substep, 1.0e-12))),
                 )
             else:
-                n_sub_required = max_substeps + 1
+                drift_substeps_required = max_substeps + 1
+            if np.isfinite(diffusion_cfl_est_macro):
+                diffusion_substeps_required = max(
+                    1,
+                    int(
+                        np.ceil(
+                            diffusion_cfl_est_macro
+                            / max(target_diffusion_cfl_substep, 1.0e-12)
+                        )
+                    ),
+                )
+            else:
+                diffusion_substeps_required = max_substeps + 1
+            n_sub_required = max(drift_substeps_required, diffusion_substeps_required)
             adaptive_max_required_substeps = max(adaptive_max_required_substeps, n_sub_required)
+            if n_sub_required > 1:
+                if (drift_substeps_required > 1) and (diffusion_substeps_required > 1):
+                    adaptive_steps_limited_by_both += 1
+                elif drift_substeps_required > 1:
+                    adaptive_steps_limited_by_drift += 1
+                else:
+                    adaptive_steps_limited_by_diffusion += 1
             if n_sub_required > max_substeps:
                 if overflow_policy == "error":
                     raise RuntimeError(
                         "Adaptive substepping overflow: required n_sub="
                         f"{n_sub_required} exceeds max_substeps={max_substeps} "
-                        f"at t={time[n_idx + 1]:.4e} s."
+                        f"at t={time[n_idx + 1]:.4e} s "
+                        f"(required_drift={drift_substeps_required}, "
+                        f"required_diffusion={diffusion_substeps_required}, "
+                        f"drift_cfl_est={cfl_est_macro:.3f}, "
+                        f"diffusion_cfl_est={diffusion_cfl_est_macro:.3f})."
                     )
                 adaptive_overflow_events += 1
                 if (adaptive_overflow_events == 1) or (n_idx % warn_every == 0):
                     print(
                         "Adaptive substepping capped at max_substeps: "
                         f"t={time[n_idx + 1]:.4e} s, required={n_sub_required}, "
-                        f"max_substeps={max_substeps}, cfl_est={cfl_est_macro:.3f}"
+                        f"required_drift={drift_substeps_required}, "
+                        f"required_diffusion={diffusion_substeps_required}, "
+                        f"max_substeps={max_substeps}, drift_cfl_est={cfl_est_macro:.3f}, "
+                        f"diffusion_cfl_est={diffusion_cfl_est_macro:.3f}"
                     )
                 n_sub = max_substeps
             else:
                 n_sub = n_sub_required
         else:
+            drift_substeps_required = 1
+            diffusion_substeps_required = 1
             n_sub_required = 1
             n_sub = 1
 
@@ -1063,6 +1138,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         adaptive_substeps[n_idx + 1] = float(n_sub)
         adaptive_dt_sub[n_idx + 1] = float(dt_sub)
         adaptive_cfl_est[n_idx + 1] = float(cfl_est_macro)
+        adaptive_diffusion_cfl_est[n_idx + 1] = float(diffusion_cfl_est_macro)
 
         t_macro_start = float(time[n_idx])
         V_gap_local = float(V_gap[n_idx])
@@ -1078,6 +1154,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         I_emission_area_local = 0.0
         I_displacement_gap_local = 0.0
         max_substep_cfl_step = 0.0
+        max_substep_diffusion_cfl_step = 0.0
         picard_iters_macro_max = 0
         for sub_idx in range(n_sub):
             t_next = t_macro_start + (sub_idx + 1) * dt_sub
@@ -1414,7 +1491,16 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
                 dt=dt_sub,
                 dx=dx,
             )
+            substep_diffusion_cfl = diffusion_cfl_func(
+                D_e=D_e_row,
+                D_i=D_i_row,
+                dt=dt_sub,
+                dx=dx,
+            )
             max_substep_cfl_step = max(max_substep_cfl_step, substep_cfl)
+            max_substep_diffusion_cfl_step = max(
+                max_substep_diffusion_cfl_step, substep_diffusion_cfl
+            )
 
             # Roll arrays: next -> current (substep-to-substep progression).
             ni_curr, ni_next = ni_next, ni_curr
@@ -1424,6 +1510,10 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
 
         adaptive_max_realized_substep_cfl = max(
             adaptive_max_realized_substep_cfl, max_substep_cfl_step
+        )
+        adaptive_max_realized_substep_diffusion_cfl = max(
+            adaptive_max_realized_substep_diffusion_cfl,
+            max_substep_diffusion_cfl_step,
         )
 
         # Store updated macro-step circuit quantities.
@@ -1447,11 +1537,22 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             I_Lp[n_idx + 1] = I_Lp_local
 
         c_cfl[n_idx + 1] = max_substep_cfl_step
+        diffusion_cfl[n_idx + 1] = max_substep_diffusion_cfl_step
         picard_iterations[n_idx + 1] = float(picard_iters_macro_max)
         if (not use_adaptive_substepping) and (max_substep_cfl_step > 1.0):
             print(
                 f"CFL condition violated at time {time[n_idx + 1]:.4e}, "
                 f"CFL = {max_substep_cfl_step:.3f}"
+            )
+        if (
+            not use_adaptive_substepping
+            and max_substep_diffusion_cfl_step > target_diffusion_cfl_substep
+        ):
+            print(
+                "Diffusion stability condition violated at time "
+                f"{time[n_idx + 1]:.4e}, diffusion CFL = "
+                f"{max_substep_diffusion_cfl_step:.3f}, target = "
+                f"{target_diffusion_cfl_substep:.3f}"
             )
 
         # Save snapshots at configured interval.
@@ -1503,11 +1604,20 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         "total_substeps": int(adaptive_total_substeps),
         "mean_substeps_per_macro": float(adaptive_total_substeps / macro_steps),
         "steps_with_substepping": int(adaptive_steps_with_split),
+        "steps_limited_by_drift": int(adaptive_steps_limited_by_drift),
+        "steps_limited_by_diffusion": int(adaptive_steps_limited_by_diffusion),
+        "steps_limited_by_both": int(adaptive_steps_limited_by_both),
         "max_substeps_used": int(adaptive_max_used_substeps),
         "max_required_substeps_estimate": int(adaptive_max_required_substeps),
         "overflow_events": int(adaptive_overflow_events),
+        "target_cfl_substep": float(target_cfl_substep),
+        "target_diffusion_cfl_substep": float(target_diffusion_cfl_substep),
         "max_pre_step_cfl_estimate": float(adaptive_max_pre_step_cfl),
         "max_realized_substep_cfl": float(adaptive_max_realized_substep_cfl),
+        "max_pre_step_diffusion_cfl_estimate": float(adaptive_max_pre_step_diffusion_cfl),
+        "max_realized_substep_diffusion_cfl": float(
+            adaptive_max_realized_substep_diffusion_cfl
+        ),
     }
     hotloop_stats = {
         "requested_backend": str(requested_hotloop_backend),
@@ -1569,8 +1679,17 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             f"mean_per_macro={adaptive_stats['mean_substeps_per_macro']:.3f}, "
             f"max_used={adaptive_stats['max_substeps_used']}, "
             f"overflow_events={adaptive_stats['overflow_events']}, "
+            f"limited_by=(drift={adaptive_stats['steps_limited_by_drift']}, "
+            f"diffusion={adaptive_stats['steps_limited_by_diffusion']}, "
+            f"both={adaptive_stats['steps_limited_by_both']}), "
+            f"target_drift_cfl={adaptive_stats['target_cfl_substep']:.3f}, "
+            f"target_diffusion_cfl={adaptive_stats['target_diffusion_cfl_substep']:.3f}, "
             f"max_pre_step_cfl={adaptive_stats['max_pre_step_cfl_estimate']:.3f}, "
-            f"max_realized_substep_cfl={adaptive_stats['max_realized_substep_cfl']:.3f}"
+            f"max_realized_substep_cfl={adaptive_stats['max_realized_substep_cfl']:.3f}, "
+            f"max_pre_step_diffusion_cfl="
+            f"{adaptive_stats['max_pre_step_diffusion_cfl_estimate']:.3f}, "
+            f"max_realized_substep_diffusion_cfl="
+            f"{adaptive_stats['max_realized_substep_diffusion_cfl']:.3f}"
         )
     print(
         "BC+Poisson Picard stats: "
@@ -1603,6 +1722,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         V_gap=np.array(V_gap),
         I_discharge=np.array(I_discharge),
         c_cfl=np.array(c_cfl),
+        diffusion_cfl=np.array(diffusion_cfl),
         I_transport_plasma=np.array(I_transport_plasma),
         I_transport_circuit=np.array(I_transport_circuit),
         I_emission_circuit=np.array(I_emission_circuit),
@@ -1622,6 +1742,7 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
         adaptive_substeps=np.array(adaptive_substeps),
         adaptive_dt_sub=np.array(adaptive_dt_sub),
         adaptive_cfl_est=np.array(adaptive_cfl_est),
+        adaptive_diffusion_cfl_est=np.array(adaptive_diffusion_cfl_est),
     )
 
 

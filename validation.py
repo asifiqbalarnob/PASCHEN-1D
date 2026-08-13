@@ -52,8 +52,9 @@ BOUNDARY_MODES = {"zero_density", "implicit_drift_closure", "electron_emission"}
 TEMPORAL_QUANTITIES = {
     "V_app", "V_node", "V_source", "V_gap", "I_discharge",
     "I_transport_plasma", "I_transport_circuit", "I_emission_circuit",
-    "I_emission_area", "I_displacement_gap", "cfl", "picard_iterations",
-    "adaptive_substeps", "adaptive_dt_sub", "adaptive_cfl_est", "particle_inventory",
+    "I_emission_area", "I_displacement_gap", "cfl", "diffusion_cfl",
+    "picard_iterations", "adaptive_substeps", "adaptive_dt_sub",
+    "adaptive_cfl_est", "adaptive_diffusion_cfl_est", "particle_inventory",
 }
 SPATIAL_QUANTITIES = {
     "ne", "ni", "phi", "E", "Gamma_i", "Gamma_e", "townsend_alpha",
@@ -308,6 +309,11 @@ def validate_simulation_config(cfg: SimulationConfig) -> None:
     if cfg.numerics.hotloop_backend == "numba" and not is_numba_available():
         errors.append("numerics.hotloop_backend='numba' requested but Numba is unavailable")
     _append_positive(errors, "numerics.target_cfl_substep", cfg.numerics.target_cfl_substep)
+    _append_positive(
+        errors,
+        "numerics.target_diffusion_cfl_substep",
+        cfg.numerics.target_diffusion_cfl_substep,
+    )
     _append_int_at_least(errors, "numerics.max_substeps", cfg.numerics.max_substeps, 1)
     _append_choice(
         errors,

@@ -87,7 +87,7 @@ def set_publication_style(
 
 
 # ============================================================
-# CFL diagnostic figure
+# Drift-CFL diagnostic figure
 # ============================================================
 
 def plot_cfl_time_history(
@@ -96,14 +96,14 @@ def plot_cfl_time_history(
     savepath: str | None = None,
 ) -> None:
     """
-    Plot the CFL number as a function of time.
+    Plot the drift-CFL number as a function of time.
 
     Parameters
     ----------
     time : np.ndarray
         Time array [s], shape (Nt,).
     c_cfl : np.ndarray
-        CFL number at each time step (dimensionless), shape (Nt,).
+        Drift-CFL number at each time step (dimensionless), shape (Nt,).
     savepath : str or None, optional
         If provided, save the figure to this path (e.g. 'CFL_Number.pdf'
         or 'CFL_Number.png'). If None, the figure is not saved.
@@ -115,8 +115,8 @@ def plot_cfl_time_history(
     fig, ax = plt.subplots(figsize=(3.2, 2.6))  # ~ single-column figure
     ax.plot(time * 1e9, c_cfl)
     ax.set_xlabel("Time [ns]")
-    ax.set_ylabel("CFL number")
-    ax.set_title("(a) CFL Number")
+    ax.set_ylabel("Drift CFL number")
+    ax.set_title("(a) Drift CFL")
     ax.grid(True)
 
     fig.tight_layout()
@@ -301,8 +301,9 @@ def plot_selected_temporal_quantity(
     Plot one temporal diagnostic quantity over a selected time window.
 
     Supported `quantity` values are configured from `config.py`:
-    V_app, V_gap, I_discharge, current decomposition, cfl, picard_iterations,
-    adaptive_substeps, adaptive_dt_sub, adaptive_cfl_est.
+    V_app, V_gap, I_discharge, current decomposition, cfl, diffusion_cfl,
+    picard_iterations, adaptive_substeps, adaptive_dt_sub, adaptive_cfl_est,
+    adaptive_diffusion_cfl_est.
     """
     if t_start is None:
         t_start = float(time[0])
@@ -330,8 +331,11 @@ def plot_selected_temporal_quantity(
         ylabel = "Current [mA]"
         title = f"{quantity} vs time"
     elif quantity == "cfl":
-        ylabel = "CFL number"
-        title = "CFL vs time"
+        ylabel = "Drift CFL number"
+        title = "Drift CFL vs time"
+    elif quantity == "diffusion_cfl":
+        ylabel = "Diffusion stability number"
+        title = "Diffusion stability vs time"
     elif quantity == "picard_iterations":
         ylabel = "Picard iterations per macro step"
         title = "Picard iterations vs time"
@@ -342,8 +346,11 @@ def plot_selected_temporal_quantity(
         ylabel = "Substep dt [s]"
         title = "Adaptive substep dt vs time"
     elif quantity == "adaptive_cfl_est":
-        ylabel = "Estimated macro CFL"
-        title = "Estimated macro CFL vs time"
+        ylabel = "Estimated macro drift CFL"
+        title = "Estimated macro drift CFL vs time"
+    elif quantity == "adaptive_diffusion_cfl_est":
+        ylabel = "Estimated macro diffusion stability"
+        title = "Estimated macro diffusion stability vs time"
 
     fig, ax = plt.subplots(figsize=(3.6, 2.8))
     ax.plot(x_ns, y)
@@ -400,11 +407,13 @@ def plot_selected_temporal_group(
         "I_emission_circuit": "I_emission_circuit",
         "I_emission_area": "I_emission_area",
         "I_displacement_gap": "I_displacement_gap",
-        "cfl": "cfl",
+        "cfl": "drift_cfl",
+        "diffusion_cfl": "diffusion_cfl",
         "picard_iterations": "picard_iterations",
         "adaptive_substeps": "adaptive_substeps",
         "adaptive_dt_sub": "adaptive_dt_sub",
-        "adaptive_cfl_est": "adaptive_cfl_est",
+        "adaptive_cfl_est": "adaptive_drift_cfl_est",
+        "adaptive_diffusion_cfl_est": "adaptive_diffusion_cfl_est",
     }
 
     for q in quantities:
@@ -422,11 +431,17 @@ def plot_selected_temporal_group(
         elif q == "adaptive_dt_sub":
             this_unit = "Substep dt [s]"
         elif q == "adaptive_cfl_est":
-            this_unit = "Estimated macro CFL"
+            this_unit = "Estimated macro drift CFL"
+        elif q == "adaptive_diffusion_cfl_est":
+            this_unit = "Estimated macro diffusion stability"
+        elif q == "cfl":
+            this_unit = "Drift CFL number"
+        elif q == "diffusion_cfl":
+            this_unit = "Diffusion stability number"
         elif q == "picard_iterations":
             this_unit = "Picard iterations per macro step"
         else:
-            this_unit = "CFL number"
+            this_unit = "Value"
 
         if unit_label is None:
             unit_label = this_unit
@@ -798,11 +813,13 @@ DEFAULT_YLABELS = {
     "I_emission_circuit": r"$I_\mathrm{emission,circuit}$ [A]",
     "I_emission_area": r"$I_\mathrm{emission,area}$ [A]",
     "I_displacement_gap": r"$I_\mathrm{displacement,gap}$ [A]",
-    "cfl": "CFL number",
+    "cfl": "Drift CFL number",
+    "diffusion_cfl": "Diffusion stability number",
     "picard_iterations": "Picard iterations",
     "adaptive_substeps": "Adaptive substeps",
     "adaptive_dt_sub": r"Adaptive substep $\Delta t$ [s]",
-    "adaptive_cfl_est": "Estimated macro CFL",
+    "adaptive_cfl_est": "Estimated macro drift CFL",
+    "adaptive_diffusion_cfl_est": "Estimated macro diffusion stability",
     "ne": r"$n_e$ [m$^{-3}$]",
     "ni": r"$n_i$ [m$^{-3}$]",
     "phi": r"$\phi$ [V]",
@@ -830,11 +847,13 @@ DISPLAY_LABELS = {
     "I_emission_circuit": r"$I_\mathrm{emission,circuit}$",
     "I_emission_area": r"$I_\mathrm{emission,area}$",
     "I_displacement_gap": r"$I_\mathrm{displacement,gap}$",
-    "cfl": "CFL",
+    "cfl": "Drift CFL",
+    "diffusion_cfl": "Diffusion stability",
     "picard_iterations": "Picard iterations",
     "adaptive_substeps": "Adaptive substeps",
     "adaptive_dt_sub": r"Adaptive $\Delta t_\mathrm{sub}$",
-    "adaptive_cfl_est": "Adaptive CFL estimate",
+    "adaptive_cfl_est": "Adaptive drift-CFL estimate",
+    "adaptive_diffusion_cfl_est": "Adaptive diffusion-stability estimate",
     "ne": r"$n_e$",
     "ni": r"$n_i$",
     "phi": r"$\phi$",
