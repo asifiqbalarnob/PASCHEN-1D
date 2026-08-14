@@ -11,6 +11,7 @@ from pathlib import Path
 
 FORMAT = "paschen-1d-electron-swarm-manifest-v1"
 REQUIRED_SECTIONS = (
+    "Mean energy (eV)",
     "Mobility *N (1/m/V/s)",
     "Diffusion coefficient *N (1/m/s)",
     "Townsend ioniz. coef. alpha/N (m2)",

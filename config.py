@@ -111,6 +111,7 @@ VoltageWaveform = Literal["step", "gaussian", "dc", "rf", "table", "tabulated", 
 BoundaryMode = Literal["zero_density", "electron_emission", "implicit_drift_closure"]
 CircuitTimeScheme = Literal["explicit_euler", "implicit_euler", "mna"]
 ElectrodeMaterialMode = Literal["shared", "separate"]
+VaughanEffectiveTemperatureMode = Literal["fixed", "local_field_approximation"]
 # Transport source selector used by electron-transport knobs below:
 # - "user_defined_equation":
 #     * electron mobility        -> physics.py: compute_user_defined_electron_mobility(...)
@@ -829,6 +830,8 @@ class CircuitConfig:
 # - `anode_electron_induced_yield` is the anode electron-induced emission yield.
 # - `use_vaughan_sey` activates the Vaughan-style electron-induced SEE model
 #   for the anode branch.
+# - `vaughan_effective_temperature_mode` selects either the fixed
+#   `plasma_state.T_e` value or the local BOLSIG+ mean-energy table.
 #
 # **External emission mechanisms**
 #
@@ -875,6 +878,11 @@ class EmissionConfig:
 
     # Anode electron-induced SEE model (Vaughan).
     use_vaughan_sey: bool = False
+    # Effective-temperature source used in the Vaughan impact-energy proxy.
+    # - "fixed": use the user-specified plasma_state.T_e value
+    # - "local_field_approximation": interpolate BOLSIG+ mean energy at the
+    #   anode-adjacent local E/N and use T_e,eff = (2/3) * mean energy
+    vaughan_effective_temperature_mode: VaughanEffectiveTemperatureMode = "fixed"
     vaughan_Emax0_eV: float = 400.0
     vaughan_dmax0: float = 3.2
     vaughan_ks: float = 1.0

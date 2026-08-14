@@ -549,6 +549,10 @@ def write_run_metadata(
         "V_dc": float(cfg.waveform.V_dc),
         "phi_rf": float(cfg.waveform.phi_rf),
         "gamma": float(cfg.emission.gamma),
+        "use_vaughan_sey": bool(cfg.emission.use_vaughan_sey),
+        "vaughan_effective_temperature_mode": str(
+            cfg.emission.vaughan_effective_temperature_mode
+        ),
         "shared_laser_t0": float(cfg.emission.shared_laser_t0),
         "shared_laser_U_J": float(cfg.emission.shared_laser_U_J),
         "cathode_laser_t0": float(cfg.emission.cathode_laser_t0),

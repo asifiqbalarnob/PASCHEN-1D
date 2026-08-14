@@ -253,9 +253,10 @@ Each run writes a folder named by `cfg.run.run_name`. Common files include:
 ## Swarm-Data Format
 
 Electron tables are authenticated by `electron_swarm_data/manifest.json` and
-must contain all four named `E/N (Td)` sections below. Generic two-column
+must contain all five named `E/N (Td)` sections below. Generic two-column
 fallbacks are intentionally not accepted:
 
+- `Mean energy (eV)`
 - `Mobility *N (1/m/V/s)`
 - `Diffusion coefficient *N (1/m/s)`
 - `Townsend ioniz. coef. alpha/N (m2)`

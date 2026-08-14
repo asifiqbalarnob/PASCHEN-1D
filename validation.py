@@ -48,6 +48,7 @@ CIRCUIT_TYPES = {
 }
 CIRCUIT_SCHEMES = {"explicit_euler", "implicit_euler", "mna"}
 OUT_OF_RANGE_POLICIES = {"clip", "error"}
+VAUGHAN_EFFECTIVE_TEMPERATURE_MODES = {"fixed", "local_field_approximation"}
 BOUNDARY_MODES = {"zero_density", "implicit_drift_closure", "electron_emission"}
 TEMPORAL_QUANTITIES = {
     "V_app", "V_node", "V_source", "V_gap", "I_discharge",
@@ -183,6 +184,12 @@ def _validate_emission(errors: list[str], cfg: SimulationConfig) -> None:
     _append_nonnegative(errors, "emission.gamma", emission.gamma)
     _append_nonnegative(
         errors, "emission.anode_electron_induced_yield", emission.anode_electron_induced_yield
+    )
+    _append_choice(
+        errors,
+        "emission.vaughan_effective_temperature_mode",
+        emission.vaughan_effective_temperature_mode,
+        VAUGHAN_EFFECTIVE_TEMPERATURE_MODES,
     )
     _append_positive(errors, "emission.vaughan_Emax0_eV", emission.vaughan_Emax0_eV)
     _append_nonnegative(errors, "emission.vaughan_dmax0", emission.vaughan_dmax0)
@@ -380,12 +387,25 @@ def validate_simulation_config(cfg: SimulationConfig) -> None:
     gas_key = str(cfg.plasma_state.gas).strip().lower()
     if cfg.plasma.electron_kinetics_model == "user_defined_electron_kinetics" and gas_key not in empirical_gases:
         errors.append("user-defined electron transport is implemented only for argon and nitrogen")
-    if (
+    uses_electron_transport_table = (
         cfg.plasma.electron_kinetics_model == "local_field_approximation"
         and cfg.local_field_approximation.electron_transport_source == "swarm_data_table_interpolation"
-    ):
+    )
+    if uses_electron_transport_table:
         _validate_table_file(
             errors, cfg, cfg.local_field_approximation.electron_swarm_data_path,
+            "local_field_approximation.electron_swarm_data_path",
+        )
+    if (
+        cfg.emission.use_vaughan_sey
+        and cfg.emission.vaughan_effective_temperature_mode
+        == "local_field_approximation"
+        and not uses_electron_transport_table
+    ):
+        _validate_table_file(
+            errors,
+            cfg,
+            cfg.local_field_approximation.electron_swarm_data_path,
             "local_field_approximation.electron_swarm_data_path",
         )
     if (

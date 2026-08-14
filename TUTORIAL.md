@@ -229,6 +229,7 @@ cfg.ionization_frequency_source.ionization_frequency_swarm_data_path = electron_
 
 The bundled BOLSIG+ output parser recognizes sections including:
 
+- `Mean energy (eV)`;
 - `Mobility *N (1/m/V/s)`;
 - `Diffusion coefficient *N (1/m/s)`;
 - `Townsend ioniz. coef. alpha/N (m2)`;
@@ -467,6 +468,20 @@ secondary emission through `gamma`, anode electron-induced emission, and
 per-electrode constant-current, Fowler-Nordheim, Murphy-Good,
 Richardson-Dushman, and quantum-pulse mechanisms. Multiple enabled external
 mechanisms on one electrode are summed.
+
+For Vaughan anode electron-induced emission, select the effective-temperature
+source explicitly:
+
+```python
+cfg.emission.use_vaughan_sey = True
+cfg.emission.vaughan_effective_temperature_mode = "fixed"
+# or: "local_field_approximation"
+```
+
+`fixed` preserves the prescribed `cfg.plasma_state.T_e` closure. The
+`local_field_approximation` option interpolates BOLSIG+ mean electron energy at
+the anode-adjacent local `E/N` and uses
+`T_e,eff = (2/3) * mean_energy` in the Vaughan impact-energy proxy.
 
 If an electrode emits electrons, its electron boundary must use
 `electron_emission`. For photoemission, set physical laser widths and energy;

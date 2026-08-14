@@ -4,6 +4,7 @@
   "solver": "BOLSIG+ 03/2016 (Mac x86_64)",
   "source_generation_manifest_sha256": "b251989faaa7d74032ee5619d8bf33ade6275e7d3dae6b2b387af56eec50e929",
   "required_sections": [
+    "Mean energy (eV)",
     "Mobility *N (1/m/V/s)",
     "Diffusion coefficient *N (1/m/s)",
     "Townsend ioniz. coef. alpha/N (m2)",
@@ -21,6 +22,7 @@
       "lxcat_database": "Biagi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -39,6 +41,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -57,6 +60,7 @@
       "lxcat_database": "ETHZ",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -75,6 +79,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -93,6 +98,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -111,6 +117,7 @@
       "lxcat_database": "Puech",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -129,6 +136,7 @@
       "lxcat_database": "Morgan",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -147,6 +155,7 @@
       "lxcat_database": "ETHZ",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -165,6 +174,7 @@
       "lxcat_database": "XJTUAETLab",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -183,6 +193,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -201,6 +212,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -219,6 +231,7 @@
       "lxcat_database": "MuroranIT",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -237,6 +250,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -255,6 +269,7 @@
       "lxcat_database": "Hayashi",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -273,6 +288,7 @@
       "lxcat_database": "Bordage",
       "batch": 1,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -291,6 +307,7 @@
       "lxcat_database": "Morgan",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 153,
         "Mobility *N (1/m/V/s)": 153,
         "Diffusion coefficient *N (1/m/s)": 153,
         "Townsend ioniz. coef. alpha/N (m2)": 153,
@@ -309,6 +326,7 @@
       "lxcat_database": "Biagi",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -327,6 +345,7 @@
       "lxcat_database": "IST-Lisbon",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -345,6 +364,7 @@
       "lxcat_database": "SIGLO",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -363,6 +383,7 @@
       "lxcat_database": "Biagi",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -381,6 +402,7 @@
       "lxcat_database": "SIGLO",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 399,
         "Mobility *N (1/m/V/s)": 399,
         "Diffusion coefficient *N (1/m/s)": 399,
         "Townsend ioniz. coef. alpha/N (m2)": 399,
@@ -399,6 +421,7 @@
       "lxcat_database": "Biagi",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 392,
         "Mobility *N (1/m/V/s)": 392,
         "Diffusion coefficient *N (1/m/s)": 392,
         "Townsend ioniz. coef. alpha/N (m2)": 392,
@@ -417,6 +440,7 @@
       "lxcat_database": "Morgan",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -435,6 +459,7 @@
       "lxcat_database": "Morgan",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 379,
         "Mobility *N (1/m/V/s)": 379,
         "Diffusion coefficient *N (1/m/s)": 379,
         "Townsend ioniz. coef. alpha/N (m2)": 379,
@@ -453,6 +478,7 @@
       "lxcat_database": "Hayashi",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -471,6 +497,7 @@
       "lxcat_database": "Biagi",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 370,
         "Mobility *N (1/m/V/s)": 370,
         "Diffusion coefficient *N (1/m/s)": 370,
         "Townsend ioniz. coef. alpha/N (m2)": 370,
@@ -489,6 +516,7 @@
       "lxcat_database": "SIGLO",
       "batch": 2,
       "section_rows": {
+        "Mean energy (eV)": 381,
         "Mobility *N (1/m/V/s)": 381,
         "Diffusion coefficient *N (1/m/s)": 381,
         "Townsend ioniz. coef. alpha/N (m2)": 381,
@@ -507,6 +535,7 @@
       "lxcat_database": "Biagi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -525,6 +554,7 @@
       "lxcat_database": "Phelps",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -543,6 +573,7 @@
       "lxcat_database": "Biagi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -561,6 +592,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -579,6 +611,7 @@
       "lxcat_database": "Phelps",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -597,6 +630,7 @@
       "lxcat_database": "Biagi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 393,
         "Mobility *N (1/m/V/s)": 393,
         "Diffusion coefficient *N (1/m/s)": 393,
         "Townsend ioniz. coef. alpha/N (m2)": 393,
@@ -615,6 +649,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -633,6 +668,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -651,6 +687,7 @@
       "lxcat_database": "Biagi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -669,6 +706,7 @@
       "lxcat_database": "Biagi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -687,6 +725,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -705,6 +744,7 @@
       "lxcat_database": "MuroranIT",
       "batch": 4,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -723,6 +763,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -741,6 +782,7 @@
       "lxcat_database": "Hayashi",
       "batch": 3,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,
@@ -759,6 +801,7 @@
       "lxcat_database": "Biagi",
       "batch": 4,
       "section_rows": {
+        "Mean energy (eV)": 400,
         "Mobility *N (1/m/V/s)": 400,
         "Diffusion coefficient *N (1/m/s)": 400,
         "Townsend ioniz. coef. alpha/N (m2)": 400,

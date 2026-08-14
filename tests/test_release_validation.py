@@ -36,6 +36,12 @@ class ReleaseValidationTests(unittest.TestCase):
             (lambda c: setattr(c.plasma, "impact_ionization_model", "magic"), "impact_ionization_model"),
             (lambda c: setattr(c.plasma, "recombination_model", "three_body"), "recombination_model"),
             (lambda c: setattr(c.emission, "electrode_material_mode", "automatic"), "electrode_material_mode"),
+            (
+                lambda c: setattr(
+                    c.emission, "vaughan_effective_temperature_mode", "automatic"
+                ),
+                "vaughan_effective_temperature_mode",
+            ),
             (lambda c: setattr(c.boundary, "anode_ion_boundary", "reflecting"), "anode_ion_boundary"),
         )
         for mutation, message in cases:

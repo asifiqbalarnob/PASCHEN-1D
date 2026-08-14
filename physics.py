@@ -30,6 +30,7 @@ from electron_transport import (
     ElectronSwarmTable,
     SECTION_DIFFUSION,
     SECTION_IONIZATION_FREQUENCY,
+    SECTION_MEAN_ENERGY,
     SECTION_MOBILITY,
     SECTION_TOWNSEND,
     load_electron_swarm_table,
@@ -100,14 +101,15 @@ class _EoverNInterpolator:
         if en_td_local.size:
             self.requested_min_Td = min(self.requested_min_Td, float(np.min(en_td_local)))
             self.requested_max_Td = max(self.requested_max_Td, float(np.max(en_td_local)))
-        if self.out_of_range_policy == "error" and (below_count or above_count):
-            raise ValueError(
-                f"Local E/N for {self.quantity_name} is outside its electron table: "
-                f"requested [{float(np.min(en_td_local)):.6g}, "
-                f"{float(np.max(en_td_local)):.6g}] Td; table "
-                f"[{self.en_td_min:.6g}, {self.en_td_max:.6g}] Td."
-            )
-        if self.out_of_range_policy != "clip":
+        if self.out_of_range_policy == "error":
+            if below_count or above_count:
+                raise ValueError(
+                    f"Local E/N for {self.quantity_name} is outside its electron table: "
+                    f"requested [{float(np.min(en_td_local)):.6g}, "
+                    f"{float(np.max(en_td_local)):.6g}] Td; table "
+                    f"[{self.en_td_min:.6g}, {self.en_td_max:.6g}] Td."
+                )
+        elif self.out_of_range_policy != "clip":
             raise ValueError(
                 f"Unknown electron table out-of-range policy: {self.out_of_range_policy!r}"
             )
@@ -116,7 +118,9 @@ class _EoverNInterpolator:
         log_values_local = np.interp(log_en_td_local, self.log_en_td, self.log_values)
         values_local = np.power(10.0, log_values_local)
 
-        if self.density_operation == "divide_by_density":
+        if self.density_operation == "none":
+            runtime_values = values_local
+        elif self.density_operation == "divide_by_density":
             runtime_values = values_local / N_g
         elif self.density_operation == "multiply_by_density":
             runtime_values = values_local * N_g
@@ -124,6 +128,50 @@ class _EoverNInterpolator:
             raise ValueError(f"Unknown density_operation: {self.density_operation}")
 
         return runtime_values.astype(np.float32, copy=False)
+
+    def evaluate_scalar(self, E_value: float, neutral_density: float) -> float:
+        """Evaluate one field value without allocating a spatial profile."""
+        N_g = float(neutral_density)
+        field = float(E_value)
+        if not np.isfinite(N_g) or N_g <= 0.0:
+            raise ValueError(f"Neutral density must be finite and positive; got {N_g!r}")
+        if not np.isfinite(field):
+            raise ValueError(
+                f"Electric field for {self.quantity_name} contains NaN or infinity."
+            )
+        en_td_local = abs(field) * 1.0e21 / N_g
+        below = en_td_local < self.en_td_min
+        above = en_td_local > self.en_td_max
+        self.below_range_count += int(below)
+        self.above_range_count += int(above)
+        self.evaluated_value_count += 1
+        self.requested_min_Td = min(self.requested_min_Td, en_td_local)
+        self.requested_max_Td = max(self.requested_max_Td, en_td_local)
+        if self.out_of_range_policy == "error":
+            if below or above:
+                raise ValueError(
+                    f"Local E/N for {self.quantity_name} is outside its electron table: "
+                    f"requested {en_td_local:.6g} Td; table "
+                    f"[{self.en_td_min:.6g}, {self.en_td_max:.6g}] Td."
+                )
+        elif self.out_of_range_policy != "clip":
+            raise ValueError(
+                f"Unknown electron table out-of-range policy: {self.out_of_range_policy!r}"
+            )
+        en_td_local = min(max(en_td_local, self.en_td_min), self.en_td_max)
+        log_value = np.interp(
+            np.log10(en_td_local),
+            self.log_en_td,
+            self.log_values,
+        )
+        value = float(np.power(10.0, log_value))
+        if self.density_operation == "none":
+            return value
+        if self.density_operation == "divide_by_density":
+            return value / N_g
+        if self.density_operation == "multiply_by_density":
+            return value * N_g
+        raise ValueError(f"Unknown density_operation: {self.density_operation}")
 
     def coverage(self) -> dict[str, float | int | str | None]:
         """Return accumulated table-range diagnostics for run metadata."""
@@ -160,6 +208,7 @@ class SwarmRuntimeInterpolationCache:
     impact_ionization_model: str = "from_townsend_alpha"
     electron_mu_eovern_interp: Optional[_EoverNInterpolator] = None
     electron_D_eovern_interp: Optional[_EoverNInterpolator] = None
+    electron_mean_energy_eovern_interp: Optional[_EoverNInterpolator] = None
     ion_mobility_eovern_interp: Optional[IonTableInterpolator] = None
     ion_diffusion_eovern_interp: Optional[IonTableInterpolator] = None
     alpha_eovern_interp: Optional[_EoverNInterpolator] = None
@@ -232,6 +281,7 @@ class SwarmRuntimeInterpolationCache:
         interpolators = {
             "mobility": self.electron_mu_eovern_interp,
             "diffusion": self.electron_D_eovern_interp,
+            "vaughan_mean_energy": self.electron_mean_energy_eovern_interp,
             "townsend_alpha": self.alpha_eovern_interp,
             "ionization_frequency": self.nu_over_N_eovern_interp,
         }
@@ -245,6 +295,22 @@ class SwarmRuntimeInterpolationCache:
                 if interp is not None
             },
         }
+
+    def vaughan_effective_temperature_eV_from_field(
+        self,
+        E_anode: float,
+        neutral_density: float,
+    ) -> float:
+        """Return (2/3) times local BOLSIG+ mean energy at the anode."""
+        if self.electron_mean_energy_eovern_interp is None:
+            raise RuntimeError(
+                "Vaughan local-field effective-temperature interpolator was not initialized."
+            )
+        mean_energy_eV = self.electron_mean_energy_eovern_interp.evaluate_scalar(
+            E_anode,
+            neutral_density,
+        )
+        return (2.0 / 3.0) * mean_energy_eV
 
     def electron_mobility_from_field(
         self,
@@ -729,7 +795,9 @@ def _interpolate_swarm_quantity_from_table(
     log_values_local = np.interp(log_en_td_local, log_en_td, log_values)
     values_local = np.power(10.0, log_values_local)
 
-    if density_operation == "divide_by_density":
+    if density_operation == "none":
+        runtime_values = values_local
+    elif density_operation == "divide_by_density":
         runtime_values = values_local / N_g
     elif density_operation == "multiply_by_density":
         runtime_values = values_local * N_g
@@ -825,6 +893,24 @@ def build_swarm_interpolation_cache(cfg: SimulationConfig) -> SwarmRuntimeInterp
             density_operation="divide_by_density",
             out_of_range_policy=electron_policy,
             quantity_name="electron diffusion",
+        )
+
+    if (
+        cfg.emission.use_vaughan_sey
+        and cfg.emission.vaughan_effective_temperature_mode
+        == "local_field_approximation"
+    ):
+        table = configured_electron_table(
+            cfg.local_field_approximation.electron_swarm_data_path,
+            "vaughan_effective_temperature",
+        )
+        mean_energy = table.section(SECTION_MEAN_ENERGY)
+        cache.electron_mean_energy_eovern_interp = _build_eovern_interpolator(
+            mean_energy.reduced_field_Td,
+            mean_energy.reduced_values_SI,
+            density_operation="none",
+            out_of_range_policy=electron_policy,
+            quantity_name="Vaughan effective electron temperature",
         )
 
     # Positive-ion local-field transport. Table identity and temperature are
@@ -1676,6 +1762,85 @@ def boundary_zero_density() -> float:
     return 0.0
 
 
+def compute_electron_impact_energy_proxy_eV(
+    incident_electron_flux: float,
+    electron_density_inner: float,
+    T_e_eV: float,
+) -> float:
+    """Return the Vaughan-model incident-electron energy proxy in eV."""
+    incident_flux = max(float(incident_electron_flux), 0.0)
+    density_inner = max(float(electron_density_inner), 1.0e-30)
+    incident_speed = incident_flux / density_inner
+    kinetic_energy_eV = (m_e / (2.0 * e)) * incident_speed * incident_speed
+    return float(kinetic_energy_eV + 2.0 * max(float(T_e_eV), 0.0))
+
+
+def compute_vaughan_secondary_electron_yield(
+    impact_energy_eV: float,
+    Emax0_eV: float,
+    dmax0: float,
+    ks: float,
+    z: float,
+    E0_eV: float,
+) -> float:
+    """Evaluate the Vaughan electron-induced secondary-emission yield."""
+    E0 = max(float(E0_eV), 0.0)
+    angular_factor = 1.0 + (
+        max(float(ks), 0.0) * float(z) * float(z) / (2.0 * np.pi)
+    )
+    Emax = max(float(Emax0_eV), 1.0e-12) * angular_factor
+    dmax = max(float(dmax0), 0.0) * angular_factor
+    normalized_energy = max(
+        (float(impact_energy_eV) - E0) / max(Emax - E0, 1.0e-12),
+        0.0,
+    )
+    if normalized_energy <= 1.0:
+        return float(
+            dmax
+            * (
+                normalized_energy * np.exp(1.0 - normalized_energy)
+            ) ** 0.56
+        )
+    if normalized_energy < 3.6:
+        return float(
+            dmax
+            * (
+                normalized_energy * np.exp(1.0 - normalized_energy)
+            ) ** 0.25
+        )
+    return float(dmax * 1.125 / (normalized_energy ** 0.35))
+
+
+def compute_anode_electron_induced_yield(
+    incident_electron_flux: float,
+    electron_density_inner: float,
+    T_e_eV: float,
+    constant_yield: float,
+    use_vaughan_sey: bool = False,
+    vaughan_Emax0_eV: float = 400.0,
+    vaughan_dmax0: float = 3.2,
+    vaughan_ks: float = 1.0,
+    vaughan_z: float = 0.0,
+    vaughan_E0: float = 0.0,
+) -> float:
+    """Return the configured constant or Vaughan anode secondary yield."""
+    if not use_vaughan_sey:
+        return max(float(constant_yield), 0.0)
+    impact_energy_eV = compute_electron_impact_energy_proxy_eV(
+        incident_electron_flux=incident_electron_flux,
+        electron_density_inner=electron_density_inner,
+        T_e_eV=T_e_eV,
+    )
+    return compute_vaughan_secondary_electron_yield(
+        impact_energy_eV=impact_energy_eV,
+        Emax0_eV=vaughan_Emax0_eV,
+        dmax0=vaughan_dmax0,
+        ks=vaughan_ks,
+        z=vaughan_z,
+        E0_eV=vaughan_E0,
+    )
+
+
 def boundary_electron_emission_density(
     boundary_side: str,
     gamma: float,
@@ -1777,27 +1942,18 @@ def boundary_electron_emission_density(
         # Anode electron-induced emission model:
         # Gamma_e = +Gamma_ext - (1 - delta_ae) * Gamma_e_incident
         Gamma_e_incident = max(mu_e * ne_inner * E_boundary, 0.0)
-        n_inner_safe = max(ne_inner, 1e-30)
-        u_in = Gamma_e_incident / n_inner_safe
-        impact_energy_proxy_eV = (m_e / (2.0 * e)) * u_in * u_in + 2.0 * max(T_e_eV, 0.0)
-        if use_vaughan_sey:
-            E0 = max(vaughan_E0, 0.0)
-            Emax = max(vaughan_Emax0_eV, 1e-12) * (
-                1.0 + (max(vaughan_ks, 0.0) * vaughan_z * vaughan_z / (2.0 * np.pi))
-            )
-            dmax = max(vaughan_dmax0, 0.0) * (
-                1.0 + (max(vaughan_ks, 0.0) * vaughan_z * vaughan_z / (2.0 * np.pi))
-            )
-            den_w = max(Emax - E0, 1e-12)
-            w = max((impact_energy_proxy_eV - E0) / den_w, 0.0)
-            if w <= 1.0:
-                delta_ae = dmax * (w * np.exp(1.0 - w)) ** 0.56
-            elif w < 3.6:
-                delta_ae = dmax * (w * np.exp(1.0 - w)) ** 0.25
-            else:
-                delta_ae = dmax * 1.125 / (w ** 0.35)
-        else:
-            delta_ae = max(anode_electron_induced_yield, 0.0)
+        delta_ae = compute_anode_electron_induced_yield(
+            incident_electron_flux=Gamma_e_incident,
+            electron_density_inner=ne_inner,
+            T_e_eV=T_e_eV,
+            constant_yield=anode_electron_induced_yield,
+            use_vaughan_sey=use_vaughan_sey,
+            vaughan_Emax0_eV=vaughan_Emax0_eV,
+            vaughan_dmax0=vaughan_dmax0,
+            vaughan_ks=vaughan_ks,
+            vaughan_z=vaughan_z,
+            vaughan_E0=vaughan_E0,
+        )
         Gamma_e_target = Gamma_ext - (1.0 - delta_ae) * Gamma_e_incident
 
     # Convert target electron flux to density using drift closure.

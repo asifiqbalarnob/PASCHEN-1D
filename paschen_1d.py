@@ -61,6 +61,7 @@ from physics import (
     build_ion_diffusion_profile,
     build_initial_conditions,
     compute_user_defined_ionization_frequency,
+    compute_anode_electron_induced_yield,
 )
 from numerics import (
     build_poisson_tridiag_interior,
@@ -282,6 +283,8 @@ def _format_anode_secondary_emission_summary(cfg: SimulationConfig) -> str:
     return (
         "model=vaughan, "
         f"{base}, "
+        f"effective_temperature_mode="
+        f"{cfg.emission.vaughan_effective_temperature_mode}, "
         f"Emax0={cfg.emission.vaughan_Emax0_eV:.6g} eV, "
         f"dmax0={cfg.emission.vaughan_dmax0:.6g}, "
         f"ks={cfg.emission.vaughan_ks:.6g}, "
@@ -537,6 +540,9 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
     gamma_ = cfg.emission.gamma
     anode_electron_induced_yield_ = cfg.emission.anode_electron_induced_yield
     use_vaughan_sey_ = cfg.emission.use_vaughan_sey
+    vaughan_effective_temperature_mode_ = (
+        cfg.emission.vaughan_effective_temperature_mode
+    )
     vaughan_Emax0_eV_ = cfg.emission.vaughan_Emax0_eV
     vaughan_dmax0_ = cfg.emission.vaughan_dmax0
     vaughan_ks_ = cfg.emission.vaughan_ks
@@ -1233,11 +1239,34 @@ def run_simulation(cfg: SimulationConfig) -> SimulationState:
             )
             if (
                 cfg.boundary.anode_electron_boundary == "electron_emission"
-                and anode_electron_induced_yield_ > 0.0
+                and (use_vaughan_sey_ or anode_electron_induced_yield_ > 0.0)
             ):
                 Gamma_e_incident_anode = max(-float(Gamma_e_row[0]), 0.0)
+                T_e_for_vaughan_eV = float(transport.T_e_eV)
+                if (
+                    vaughan_effective_temperature_mode_
+                    == "local_field_approximation"
+                ):
+                    T_e_for_vaughan_eV = (
+                        swarm_interp_cache.vaughan_effective_temperature_eV_from_field(
+                            E_anode=float(E_curr[0]),
+                            neutral_density=neutral_density,
+                        )
+                    )
+                delta_ae = compute_anode_electron_induced_yield(
+                    incident_electron_flux=Gamma_e_incident_anode,
+                    electron_density_inner=float(ne_curr[1]),
+                    T_e_eV=T_e_for_vaughan_eV,
+                    constant_yield=anode_electron_induced_yield_,
+                    use_vaughan_sey=use_vaughan_sey_,
+                    vaughan_Emax0_eV=vaughan_Emax0_eV_,
+                    vaughan_dmax0=vaughan_dmax0_,
+                    vaughan_ks=vaughan_ks_,
+                    vaughan_z=vaughan_z_,
+                    vaughan_E0=vaughan_E0_,
+                )
                 Gamma_surface_anode += (
-                    max(anode_electron_induced_yield_, 0.0) * Gamma_e_incident_anode
+                    delta_ae * Gamma_e_incident_anode
                 )
             if (
                 cfg.boundary.cathode_electron_boundary == "electron_emission"

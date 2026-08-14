@@ -15,11 +15,13 @@ import data_paths
 
 
 MANIFEST_FORMAT = "paschen-1d-electron-swarm-manifest-v1"
+SECTION_MEAN_ENERGY = "Mean energy (eV)"
 SECTION_MOBILITY = "Mobility *N (1/m/V/s)"
 SECTION_DIFFUSION = "Diffusion coefficient *N (1/m/s)"
 SECTION_TOWNSEND = "Townsend ioniz. coef. alpha/N (m2)"
 SECTION_IONIZATION_FREQUENCY = "Total ionization freq. /N (m3/s)"
 REQUIRED_SECTIONS = (
+    SECTION_MEAN_ENERGY,
     SECTION_MOBILITY,
     SECTION_DIFFUSION,
     SECTION_TOWNSEND,
@@ -175,7 +177,7 @@ def _parse_sections(path: Path, record: dict[str, Any]) -> dict[str, ElectronSwa
                 f"Electron section {label!r} requires a positive, unique, strictly "
                 f"increasing E/N axis: {path}"
             )
-        if label in {SECTION_MOBILITY, SECTION_DIFFUSION}:
+        if label in {SECTION_MEAN_ENERGY, SECTION_MOBILITY, SECTION_DIFFUSION}:
             invalid_values = np.any(values <= 0.0)
             requirement = "strictly positive"
         else:
