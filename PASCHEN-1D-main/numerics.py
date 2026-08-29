@@ -362,8 +362,8 @@ def kt_flux_update(
     H_m = 0.5 * (f(nL_m, Ei_m) + f(nR_m, Ei_m)) - 0.5 * a_m * (nR_m - nL_m)
 
     # Diffusion fluxes at faces: F_d = -D_face * (dn/dx)_face.
-    grad_p = (nR_p - nL_p) / dx
-    grad_m = (nR_m - nL_m) / dx
+    grad_p = (n[2:] - n[1:-1]) / dx
+    grad_m = (n[1:-1] - n[:-2]) / dx
 
     if np.isscalar(D):
         D_p = D
@@ -541,9 +541,9 @@ def kt_flux_update_linear_reuse(
 
     grad_p = ws["grad_p"]
     grad_m = ws["grad_m"]
-    np.subtract(nR_p, nL_p, out=grad_p)
+    np.subtract(n[2:], n[1:-1], out=grad_p)
     grad_p /= dx
-    np.subtract(nR_m, nL_m, out=grad_m)
+    np.subtract(n[1:-1], n[:-2], out=grad_m)
     grad_m /= dx
 
     D_p = ws["D_p"]

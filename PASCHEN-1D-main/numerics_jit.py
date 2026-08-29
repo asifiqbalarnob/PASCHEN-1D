@@ -148,8 +148,8 @@ if NUMBA_AVAILABLE:
                 - 0.5 * a_m[j] * (nR_m[j] - nL_m[j])
             )
 
-            grad_p[j] = (nR_p[j] - nL_p[j]) / dx
-            grad_m[j] = (nR_m[j] - nL_m[j]) / dx
+            grad_p[j] = (n[i + 1] - n[i]) / dx
+            grad_m[j] = (n[i] - n[i - 1]) / dx
             D_p[j] = 0.5 * (D[i] + D[i + 1])
             D_m[j] = 0.5 * (D[i - 1] + D[i])
             Fd_p[j] = -D_p[j] * grad_p[j]
@@ -245,8 +245,8 @@ if NUMBA_AVAILABLE:
                 - 0.5 * a_m[j] * (nR_m[j] - nL_m[j])
             )
 
-            grad_p[j] = (nR_p[j] - nL_p[j]) / dx
-            grad_m[j] = (nR_m[j] - nL_m[j]) / dx
+            grad_p[j] = (n[i + 1] - n[i]) / dx
+            grad_m[j] = (n[i] - n[i - 1]) / dx
             D_p[j] = 0.5 * (D[i] + D[i + 1])
             D_m[j] = 0.5 * (D[i - 1] + D[i])
             Fd_p[j] = -D_p[j] * grad_p[j]
